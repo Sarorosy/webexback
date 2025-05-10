@@ -37,7 +37,9 @@ const getUserInteractedUsersAndGroups = (req, res) => {
                             id: group.id,
                             name: group.name,
                             type: "group",
-                            last_interacted_time: null // default
+                            last_interacted_time: null, // default
+                            favourites: group.favourites || "",
+                            profile_pic : null
                         });
                     });
 
@@ -74,44 +76,104 @@ const getMessages = (req, res) => {
         return res.status(400).json({ status: false, message: "sender_id and receiver_id are required" });
     }
 
-    chatModel.getMessagesBetweenUsers(sender_id, receiver_id, parseInt(skip), parseInt(limit), (err, messages) => {
-        if (err) {
-            return res.status(500).json({ status: false, message: "Error fetching messages", error: err });
-        }
+    chatModel.getMessagesBetweenUsers(
+        sender_id,
+        receiver_id,
+        parseInt(skip),
+        parseInt(limit),
+        (err, messages) => {
+            if (err) {
+                return res.status(500).json({ status: false, message: "Error fetching messages", error: err });
+            }
 
-        res.json(messages); // return just array
-    });
+            res.json(messages); // return messages directly
+        }
+    );
 };
 
+
 const sendMessage = (req, res) => {
-    const { sender_id, receiver_id, message } = req.body;
+    const { sender_id, receiver_id, message, sender_name, isReply, replyMsgId } = req.body;
 
     if (!sender_id || !receiver_id || !message?.trim()) {
         return res.status(400).json({ status: false, message: "sender_id, receiver_id, and message are required" });
     }
 
-    chatModel.insertMessage(sender_id, receiver_id, message, (err, result) => {
-        if (err) {
-            return res.status(500).json({ status: false, message: "Error sending message", error: err });
-        }
-        const io = getIO();
+    const io = getIO();
 
-        // Emit to both users involved (you can also emit to rooms)
-        const messageData = {
-            id: result.insertId,
-            sender_id,
-            receiver_id,
-            message,
-            created_at: new Date().toISOString(),
-            is_edited: 0,
-        };
+    if (isReply && replyMsgId) {
+        // Insert only into tbl_replies
+        chatModel.insertReply(replyMsgId, sender_id, message, (replyErr, result) => {
+            if (replyErr) {
+                return res.status(500).json({ status: false, message: "Error inserting reply", error: replyErr });
+            }
 
-        io.emit('new_message', messageData);
-        io.emit('new_message', messageData);
+            const replyData = {
+                id: result.insertId,
+                msg_id: replyMsgId,
+                reply_message: message,
+                sender_id,
+                reply_user_name: sender_name,
+                reply_at: new Date().toISOString(),
+            };
 
-        res.status(200).json({ status: true, message: "Message sent", insertId: result.insertId });
-    });
+            io.emit('new_reply', replyData);
+
+            return res.status(200).json({ status: true, message: "Reply sent", insertId: result.insertId });
+        });
+    } else {
+        // Insert only into tbl_messages
+        chatModel.insertMessage(sender_id, receiver_id, message, (err, result) => {
+            if (err) {
+                return res.status(500).json({ status: false, message: "Error sending message", error: err });
+            }
+
+            const messageData = {
+                id: result.insertId,
+                sender_id,
+                receiver_id,
+                message,
+                sender_name,
+                created_at: new Date().toISOString(),
+                is_edited: 0,
+            };
+
+            io.emit('new_message', messageData);
+
+            return res.status(200).json({ status: true, message: "Message sent", insertId: result.insertId });
+        });
+    }
 };
 
 
-module.exports = { getUserInteractedUsersAndGroups,getMessages ,sendMessage};
+
+const markFavourite = async (req, res) => {
+    try {
+      const { id, user_id, type } = req.body;
+  
+      if (!id || !user_id || !type) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+  
+      const updatedFavourites = await chatModel.markFavourite({ id, user_id, type });
+  
+      // Emit to the user who marked the favourite
+      const io = getIO();
+      io.emit("favouriteUpdated", {
+        id,
+        type,
+        user_id,
+        favourites: updatedFavourites,
+      });
+  
+      res.status(200).json({
+        message: "Favourite updated",
+        favourites: updatedFavourites,
+      });
+    } catch (err) {
+      console.error("Error updating favourite:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  };
+
+module.exports = { getUserInteractedUsersAndGroups,getMessages ,sendMessage, markFavourite};

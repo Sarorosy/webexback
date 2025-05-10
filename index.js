@@ -15,6 +15,7 @@ const teamsRoutes = require("./routes/teamsRoutes");
 const milestoneRoutes = require("./routes/milestoneRoutes");
 const groupRoutes = require("./routes/groupRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const messageRoutes = require("./routes/messageRoutes");
 // Initialize Express app and server
 const app = express();
 app.use(bodyParser.json());
@@ -35,7 +36,7 @@ app.use("/api/teams", teamsRoutes);
 app.use("/api/milestones", milestoneRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/chats", chatRoutes);
-
+app.use("/api/messages", messageRoutes);
 
 app.use("/uploads/taskuploads", express.static("uploads/taskuploads"));
 app.use("/uploads/commentuploads", express.static("uploads/commetuploads"));
@@ -56,9 +57,21 @@ db.connect((err) => {
     console.log("Connected to MySQL database");
 });
 
+const onlineUsers = new Map();
+
 // Socket.IO Logic
 io.on("connection", (socket) => {
-    console.log("A user connected:", socket.id);
+    socket.on("user-connected", (userId) => {
+        onlineUsers.set(userId, socket.id);
+        io.emit("online-users", Array.from(onlineUsers.keys())); // broadcast online list
+    });
+
+    socket.on("typing", ({ from, to }) => {
+        console.log(`User ${from} is typing to ${to}`);
+        io.emit("typing", { from, to }); // Basic: sends to all users
+    });
+
+
 
     // Handle incoming messages
     socket.on("send_message", (data) => {
@@ -177,29 +190,29 @@ io.on("connection", (socket) => {
 
     socket.on("updated_tags", (data) => {
         const { taskId, tags } = data;
-    
+
         if (!taskId || !Array.isArray(tags)) {
             console.error("Invalid data for tag update");
             return;
         }
-    
+
         // Convert tags array to JSON string for MySQL storage
         const tagsJson = JSON.stringify(tags);
-    
+
         const updateQuery = "UPDATE tbl_tasks SET tags = ? WHERE id = ?";
         db.query(updateQuery, [tagsJson, taskId], (err, result) => {
             if (err) {
                 console.error("Error updating task tags:", err);
                 return;
             }
-    
+
             console.log("Task tags updated successfully", tags);
-    
+
             // Broadcast update to all connected clients
             io.emit("task_tags_updated", { taskId, tags });
         });
     });
-    
+
 
     socket.on("edit_task_title", (data) => {
         const { taskId, title, user_id } = data;
@@ -377,7 +390,7 @@ io.on("connection", (socket) => {
             console.log("New task title:", dueDate);
             if (currentDueDate == dueDate) {
                 console.log("No changes detected in task Due_date, skipping update.");
-                return; 
+                return;
             }
 
             // Step 2: Proceed with updating the task title in the database
@@ -424,9 +437,14 @@ io.on("connection", (socket) => {
             });
         });
     });
-    // Handle disconnection
     socket.on("disconnect", () => {
-        console.log("A user disconnected:", socket.id);
+        for (const [userId, sockId] of onlineUsers.entries()) {
+            if (sockId === socket.id) {
+                onlineUsers.delete(userId);
+                break;
+            }
+        }
+        io.emit("online-users", Array.from(onlineUsers.keys())); // broadcast updated list
     });
 });
 
