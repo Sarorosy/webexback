@@ -1,4 +1,6 @@
 const groupModel = require("../models/groupModel");
+const chatModel = require('../models/chatModel');
+const { getIO } = require('../socket'); 
 
 // Create group
 const createGroup = (req, res) => {
@@ -62,12 +64,50 @@ const addMember = (req, res) => {
     });
 };
 
+const addMembers = (req, res) => {
+    const { group_id, user_id, user_name, members } = req.body;
+
+    if (!group_id || !user_id || !Array.isArray(members) || members.length === 0) {
+        return res.status(400).json({ status: false, message: "group_id, user_id, and members[] are required" });
+    }
+
+    groupModel.addMembersToGroup(group_id, members, (err, results) => {
+        if (err) {
+            return res.status(500).json({ status: false, message: "Database error while adding members" });
+        }
+
+        // After adding members, insert history message
+        const message = `added ${members.length} people(s) to this group`;
+        chatModel.insertMessage(user_id, group_id, "group", message, 1, (msgErr, msgResult) => {
+            if (msgErr) {
+                return res.status(500).json({ status: false, message: "Error inserting group history message" });
+            }
+
+            const io = getIO();
+            const messageData = {
+                id: msgResult.insertId,
+                sender_id: user_id,
+                receiver_id: group_id,
+                message,
+                sender_name: user_name ?? "Admin",
+                created_at: new Date().toISOString(),
+                is_edited: 0,
+                is_history: 1,
+            };
+
+            io.emit('new_message', messageData);
+
+            res.json({ status: true, message: "Members added and message sent", data: results });
+        });
+    });
+};
+
 // Get members of a group
 const getGroupMembers = (req, res) => {
     const groupId = req.params.group_id;
 
     groupModel.getGroupMembers(groupId, (err, members) => {
-        if (err) return res.status(500).json({ status: false, message: "Database error" });
+        if (err) return res.status(500).json({ status: false, message: "Database error" + err });
         res.json({ status: true, members });
     });
 };
@@ -87,6 +127,7 @@ module.exports = {
     getGroupById,
     getAllGroups,
     addMember,
+    addMembers,
     getGroupMembers,
     removeMember,
 };

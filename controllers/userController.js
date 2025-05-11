@@ -58,10 +58,42 @@ const getAllUsers = (req, res) => {
     });
 };
 
+const getUsersForGroup = (req, res) => {
+    const { user_id } = req.body;
+
+    if (!user_id) {
+        return res.status(400).json({ status: false, message: "User ID is required" });
+    }
+
+    userModel.getUsersForGroup(user_id, (err, users) => {
+        if (err) {
+            return res.status(500).json({ status: false, message: "Database error" });
+        }
+        res.json({ status: true, data: users });
+    });
+};
+
+const getUsersExcludingIds = (req, res) => {
+    const { exclude_ids = [] } = req.body;
+
+    // Ensure exclude_ids is an array
+    if (!Array.isArray(exclude_ids)) {
+        return res.status(400).json({ status: false, message: "exclude_ids must be an array" });
+    }
+
+    userModel.getUsersExcludingIds(exclude_ids, (err, users) => {
+        if (err) {
+            return res.status(500).json({ status: false, message: "Database error" });
+        }
+        res.json({ status: true, data: users });
+    });
+};
+
+
 
 const updateUser = (req, res) => {
     upload.single("profile_pic")(req, res, () => {
-        const { id, name, pronouns, bio, email } = req.body;
+        const { id, name, pronouns, bio, email, user_panel, max_group_count } = req.body;
         
         // Fetch the existing user to retain the old profile picture if no new file is uploaded
         userModel.findUserById(id, (err, existingUser) => {
@@ -71,7 +103,7 @@ const updateUser = (req, res) => {
 
             let profile_pic = req.file ? `/uploads/users/${req.file.filename}` : existingUser.profile_pic; // Retain old pic if no new file
 
-            userModel.updateUser(id, { name, pronouns, bio, profile_pic }, (err, result) => {
+            userModel.updateUser(id, { name, pronouns, bio, profile_pic, user_panel, max_group_count }, (err, result) => {
                 if (err) {
                     console.error("Update error:", err);
                     return res.status(500).json({ status: false, message: "Database error" });
@@ -95,12 +127,14 @@ const updateUser = (req, res) => {
     });
 };
 
-
 const addUser = (req, res) => {
-    const { name, email, password } = req.body;
+    const { name, email, password, user_panel, max_group_count, office_name, city_name } = req.body;
+
     if (!name || !email || !password) {
         return res.status(400).json({ status: false, message: "All fields are required" });
     }
+
+    const finalMaxGroupCount = Number.isInteger(max_group_count) && max_group_count > 0 ? max_group_count : 5;
 
     userModel.findUserByEmail(email, (err, user) => {
         if (err) return res.status(500).json({ status: false, message: "Database error" });
@@ -109,7 +143,17 @@ const addUser = (req, res) => {
             return res.status(400).json({ status: false, message: "Email already exists" });
         }
 
-        userModel.addUser({ name, email, password: password }, (err, result) => {
+        const newUser = {
+            name,
+            email,
+            password,
+            user_panel,
+            max_group_count: finalMaxGroupCount,
+            office_name,
+            city_name
+        };
+
+        userModel.addUser(newUser, (err, result) => {
             if (err) return res.status(500).json({ status: false, message: "Failed to add user" });
 
             res.json({ status: true, message: "User added successfully" });
@@ -169,4 +213,4 @@ const getUserById = (req, res) => {
 };
 
 
-module.exports = { loginUser , getAllUsers, updateUser, addUser, editUser, deleteUser,getUserById };
+module.exports = { loginUser , getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser, addUser, editUser, deleteUser,getUserById };

@@ -70,7 +70,7 @@ const getUserInteractedUsersAndGroups = (req, res) => {
 
 
 const getMessages = (req, res) => {
-    const { sender_id, receiver_id, skip = 0, limit = 100 } = req.query;
+    const { sender_id, receiver_id,user_type ="user", skip = 0, limit = 100 } = req.query;
 
     if (!sender_id || !receiver_id) {
         return res.status(400).json({ status: false, message: "sender_id and receiver_id are required" });
@@ -79,6 +79,7 @@ const getMessages = (req, res) => {
     chatModel.getMessagesBetweenUsers(
         sender_id,
         receiver_id,
+        user_type,
         parseInt(skip),
         parseInt(limit),
         (err, messages) => {
@@ -93,7 +94,7 @@ const getMessages = (req, res) => {
 
 
 const sendMessage = (req, res) => {
-    const { sender_id, receiver_id, message, sender_name, isReply, replyMsgId } = req.body;
+    const { sender_id, receiver_id, message, sender_name,user_type = "user", isReply, replyMsgId } = req.body;
 
     if (!sender_id || !receiver_id || !message?.trim()) {
         return res.status(400).json({ status: false, message: "sender_id, receiver_id, and message are required" });
@@ -123,7 +124,7 @@ const sendMessage = (req, res) => {
         });
     } else {
         // Insert only into tbl_messages
-        chatModel.insertMessage(sender_id, receiver_id, message, (err, result) => {
+        chatModel.insertMessage(sender_id, receiver_id, user_type, message, 0, (err, result) => {
             if (err) {
                 return res.status(500).json({ status: false, message: "Error sending message", error: err });
             }

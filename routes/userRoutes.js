@@ -4,6 +4,8 @@ const { getAllUsers } = require("../controllers/userController");
 const { updateUser } = require("../controllers/userController");
 const {addUser , editUser, deleteUser} = require('../controllers/userController');
 const { getUserById } = require("../controllers/userController");
+const { getUsersForGroup } = require("../controllers/userController");
+const { getUsersExcludingIds } = require("../controllers/userController");
 
 
 const router = express.Router();
@@ -12,6 +14,11 @@ const router = express.Router();
 router.post("/login", loginUser);
 
 router.get("/fetchallusers", getAllUsers);
+
+router.post("/getusersforgroup", getUsersForGroup);
+
+router.post("/getusersexcluding", getUsersExcludingIds);
+
 
 router.put("/update", updateUser);
 

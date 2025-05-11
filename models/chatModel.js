@@ -25,11 +25,11 @@ const getUserInteractions = (userId, callback) => {
     const query = `
         SELECT 
             IF(m.sender_id = ?, m.receiver_id, m.sender_id) AS id,
-            ANY_VALUE(u.name) AS name,
+            MAX(u.name) AS name,
             MAX(m.created_at) AS last_interacted_time,
             'user' AS type,
-            ANY_VALUE(u.favourites) AS favourites,
-            ANY_VALUE(u.profile_pic) AS profile_pic
+            MAX(u.favourites) AS favourites,
+            MAX(u.profile_pic) AS profile_pic
         FROM tbl_messages m
         JOIN tbl_users u 
             ON u.id = IF(m.sender_id = ?, m.receiver_id, m.sender_id)
@@ -50,7 +50,7 @@ const getGroupInteractions = (userId, callback) => {
             g.name,
             MAX(m.created_at) AS last_interacted_time,
             'group' AS type,
-             ANY_VALUE(g.favourites) AS favourites
+             MAX(g.favourites) AS favourites
         FROM tbl_messages m
         JOIN tbl_groups g ON g.id = m.group_id
         WHERE m.group_id IS NOT NULL
@@ -61,42 +61,71 @@ const getGroupInteractions = (userId, callback) => {
 };
 
 
-///////////////////messages
-const getMessagesBetweenUsers = (senderId, receiverId, skip, limit, callback) => {
-    const query = `
-        SELECT 
-            m.*, 
-            u.name AS sender_name,
-            (
-                SELECT JSON_ARRAYAGG(
-                    JSON_OBJECT(
-                        'id', sub.id,
-                        'msg_id', sub.msg_id,
-                        'reply_message', sub.reply_message,
-                        'sender_id', sub.sender_id,
-                        'reply_user_name', sub.reply_user_name,
-                        'reply_at', sub.reply_at
-                    )
-                )
-                FROM (
-                    SELECT r.id, r.msg_id, r.reply_message, r.sender_id, ru.name AS reply_user_name, r.reply_at
-                    FROM tbl_replies r
-                    LEFT JOIN tbl_users ru ON ru.id = r.sender_id
-                    WHERE r.msg_id = m.id
-                    ORDER BY r.id DESC
-                ) AS sub
-            ) AS replies
-        FROM tbl_messages m
-        JOIN tbl_users u ON m.sender_id = u.id
-        WHERE 
-            ((m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?))
-            AND m.group_id IS NULL
-        ORDER BY m.created_at DESC
-        LIMIT ? OFFSET ?
-    `;
+const getMessagesBetweenUsers = (senderId, receiverId, userType, skip, limit, callback) => {
+  let query = `
+    SELECT 
+      m.*, 
+      u.name AS sender_name,
+      r.id AS reply_id,
+      r.msg_id AS reply_msg_id,
+      r.reply_message,
+      r.sender_id AS reply_sender_id,
+      ru.name AS reply_user_name,
+      r.reply_at
+    FROM tbl_messages m
+    JOIN tbl_users u ON m.sender_id = u.id
+    LEFT JOIN tbl_replies r ON r.msg_id = m.id
+    LEFT JOIN tbl_users ru ON ru.id = r.sender_id
+    WHERE 
+  `;
 
-    db.query(query, [senderId, receiverId, receiverId, senderId, limit, skip], callback);
+  let params = [];
+
+  if (userType === 'user') {
+    query += `((m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)) AND m.group_id IS NULL`;
+    params.push(senderId, receiverId, receiverId, senderId);
+  } else {
+    query += `m.group_id = ?`;
+    params.push(receiverId);
+  }
+
+  query += ` ORDER BY m.created_at DESC LIMIT ? OFFSET ?`;
+  params.push(limit, skip);
+
+  db.query(query, params, (err, results) => {
+    if (err) {
+      return callback(err, null);
+    }
+
+    const messages = results.reduce((acc, row) => {
+      let message = acc.find(m => m.id === row.id);
+      if (!message) {
+        message = {
+          ...row,
+          replies: []
+        };
+        acc.push(message);
+      }
+
+      if (row.reply_id) {
+        message.replies.push({
+          id: row.reply_id,
+          msg_id: row.reply_msg_id,
+          reply_message: row.reply_message,
+          sender_id: row.reply_sender_id,
+          reply_user_name: row.reply_user_name,
+          reply_at: row.reply_at
+        });
+      }
+
+      return acc;
+    }, []);
+
+    callback(null, messages);
+  });
 };
+
+
 
   
 
@@ -104,13 +133,27 @@ const getMessagesBetweenUsers = (senderId, receiverId, skip, limit, callback) =>
 
 
 
-const insertMessage = (sender_id, receiver_id, message, callback) => {
-    const query = `
-        INSERT INTO tbl_messages (sender_id, receiver_id, message, created_at)
-        VALUES (?, ?, ?, NOW())
-    `;
-    db.query(query, [sender_id, receiver_id, message], callback);
+const insertMessage = (sender_id, receiver_id, user_type = "user", message, is_history = 0, callback) => {
+    let query = '';
+    let values = [];
+
+    if (user_type === 'user') {
+        query = `
+            INSERT INTO tbl_messages (sender_id, receiver_id, message, is_history, created_at)
+            VALUES (?, ?, ?, ?, NOW())
+        `;
+        values = [sender_id, receiver_id, message, is_history];
+    } else {
+        query = `
+            INSERT INTO tbl_messages (sender_id, group_id, message, is_history, created_at)
+            VALUES (?, ?, ?, ?, NOW())
+        `;
+        values = [sender_id, receiver_id, message, is_history];
+    }
+
+    db.query(query, values, callback);
 };
+
 
 const insertReply = (msgId, sender_id, replyMessage, callback) => {
     const query = `

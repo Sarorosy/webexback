@@ -9,12 +9,20 @@ const createGroup = (data, callback) => {
 
 // Get group by ID
 const getGroupById = (id, callback) => {
-    const query = "SELECT * FROM tbl_groups WHERE id = ?";
+    const query = `
+        SELECT 
+            g.*, 
+            COALESCE(u.name, 'Unknown User') AS created_by_username
+        FROM tbl_groups g
+        LEFT JOIN tbl_users u ON g.created_by = u.id
+        WHERE g.id = ?
+    `;
     db.query(query, [id], (err, results) => {
         if (err) return callback(err);
         callback(null, results[0]);
     });
 };
+
 
 const getAllGroups = (callback) => {
     const query = `
@@ -65,21 +73,30 @@ const getAllGroups = (callback) => {
 };
 
 // Add user to group
-const addMember = (group_id, user_id, role = 'member', callback) => {
-    const query = "INSERT INTO tbl_group_members (group_id, user_id, role) VALUES (?, ?, ?)";
-    db.query(query, [group_id, user_id, role], callback);
+const addMember = (group_id, user_id, callback) => {
+    const query = "INSERT INTO tbl_group_members (group_id, user_id) VALUES (?, ?)";
+    db.query(query, [group_id, user_id], callback);
+};
+const addMembersToGroup = (group_id, members, callback) => {
+    if (!members.length) return callback(null, []);
+
+    const values = members.map((user_id) => [group_id, user_id]);
+    const query = "INSERT IGNORE INTO tbl_group_members (group_id, user_id) VALUES ?";
+
+    db.query(query, [values], callback);
 };
 
-// Get members of a group
+
 const getGroupMembers = (group_id, callback) => {
     const query = `
-        SELECT u.id, u.name, u.email, gm.role 
+        SELECT u.id, u.name, u.email, u.profile_pic
         FROM tbl_group_members gm 
         JOIN tbl_users u ON gm.user_id = u.id 
         WHERE gm.group_id = ?
     `;
     db.query(query, [group_id], callback);
 };
+
 
 // Remove member from group
 const removeMember = (group_id, user_id, callback) => {
@@ -103,6 +120,7 @@ module.exports = {
     getGroupById,
     getAllGroups,
     addMember,
+    addMembersToGroup,
     addMultipleMembers,
     getGroupMembers,
     removeMember,

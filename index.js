@@ -41,22 +41,23 @@ app.use("/api/messages", messageRoutes);
 app.use("/uploads/taskuploads", express.static("uploads/taskuploads"));
 app.use("/uploads/commentuploads", express.static("uploads/commetuploads"));
 app.use("/uploads/users", express.static("uploads/users"));
-// MySQL Database Connection
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: 'sarorosy',
-    database: 'chat_app',
+const db = mysql.createPool({
+    connectionLimit: 10,
+    host: '50.87.148.156',
+    user: 'rapidcol_webex',
+    password: 'e5_^ki&qOlC3',
+    database: 'rapidcol_webex',
 });
 
-db.connect((err) => {
+// Helper to get a connection and execute a query
+db.getConnection((err, connection) => {
     if (err) {
-        console.error("Database connection failed:", err);
+        console.error('Error connecting to the database:', err);
         process.exit(1);
     }
-    console.log("Connected to MySQL database");
+    console.log('Connected to MySQL database');
+    connection.release(); // release the connection back to the pool
 });
-
 const onlineUsers = new Map();
 
 // Socket.IO Logic

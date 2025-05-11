@@ -15,14 +15,61 @@ const updateUserToken = (userId, token, callback) => {
 };
 
 const getAllUsers = (callback) => {
-    const query = "SELECT * FROM tbl_users";
+    const query = "SELECT * FROM tbl_users WHERE trashed != 1";
     db.query(query, (err, results) => {
         if (err) return callback(err, null);
         callback(null, results);
     });
 };
+
+const getUsersForGroup = (excludedUserId, callback) => {
+    const query = `
+        SELECT 
+            u.id, u.name, u.email, u.user_type,u.profile_pic, u.max_group_count,
+            COUNT(gm.group_id) AS group_present_count,
+            (COUNT(gm.group_id) < u.max_group_count) AS is_available
+        FROM tbl_users u
+        LEFT JOIN tbl_group_members gm ON gm.user_id = u.id
+        WHERE u.id != ? AND u.trashed != 1
+        GROUP BY u.id
+    `;
+    db.query(query, [excludedUserId], (err, results) => {
+        if (err) return callback(err, null);
+        callback(null, results);
+    });
+};
+
+const getUsersExcludingIds = (excludeIds, callback) => {
+    let query = `
+        SELECT 
+            u.id, u.name, u.email, u.user_type, u.profile_pic, u.max_group_count,
+            COUNT(gm.group_id) AS group_present_count,
+            (COUNT(gm.group_id) < u.max_group_count) AS is_available
+        FROM tbl_users u
+        LEFT JOIN tbl_group_members gm ON gm.user_id = u.id
+        WHERE u.trashed != 1
+    `;
+
+    const params = [];
+
+    if (excludeIds.length > 0) {
+        const placeholders = excludeIds.map(() => '?').join(', ');
+        query += ` AND u.id NOT IN (${placeholders})`;
+        params.push(...excludeIds);
+    }
+
+    query += ` GROUP BY u.id`;
+
+    db.query(query, params, (err, results) => {
+        if (err) return callback(err, null);
+        callback(null, results);
+    });
+};
+
+
+
 const findUserById = (id, callback) => {
-    const query = "SELECT id, name, pronouns, password, bio, email, profile_pic FROM tbl_users WHERE id = ?";
+    const query = "SELECT id, name, pronouns, password, bio, email, profile_pic, user_panel, max_group_count, office_name, city_name FROM tbl_users WHERE id = ?";
     db.query(query, [id], (err, results) => {
         if (err) return callback(err, null);
         if (results.length === 0) return callback(null, null);
@@ -32,16 +79,17 @@ const findUserById = (id, callback) => {
 
 
 const updateUser = (id, userData, callback) => {
-    const { name, pronouns, bio, profile_pic } = userData;
-    const query = "UPDATE tbl_users SET name = ?, pronouns = ?, bio = ?, profile_pic = ? WHERE id = ?";
-    db.query(query, [name, pronouns, bio, profile_pic, id], callback);
+    const { name, pronouns, bio, profile_pic, user_panel, max_group_count } = userData;
+    const query = "UPDATE tbl_users SET name = ?, pronouns = ?, bio = ?, profile_pic = ?, user_panel = ? , max_group_count = ? WHERE id = ?";
+    db.query(query, [name, pronouns, bio, profile_pic, user_panel, max_group_count, id], callback);
 };
 
 const addUser = (userData, callback) => {
-    const { name, email, password } = userData;
-    const query = "INSERT INTO tbl_users (name, email, password) VALUES (?, ?, ?)";
-    db.query(query, [name, email, password], callback);
+    const { name, email, password, user_panel, max_group_count, office_name, city_name } = userData;
+    const query = "INSERT INTO tbl_users (name, email, password, user_panel, max_group_count, office_name, city_name) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    db.query(query, [name, email, password, user_panel, max_group_count, office_name, city_name], callback);
 };
+
 
 // Soft delete user (set trashed = 1)
 const softDeleteUser = (id, callback) => {
@@ -49,4 +97,4 @@ const softDeleteUser = (id, callback) => {
     db.query(query, [id], callback);
 };
 
-module.exports = { findUserByEmail, updateUserToken, getAllUsers, updateUser, findUserById, addUser, softDeleteUser };
+module.exports = { findUserByEmail, updateUserToken, getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser, findUserById, addUser, softDeleteUser };
