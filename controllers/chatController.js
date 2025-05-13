@@ -38,8 +38,11 @@ const getUserInteractedUsersAndGroups = (req, res) => {
                             name: group.name,
                             type: "group",
                             last_interacted_time: null, // default
+                            user_type: null,
+                            email: null,
+                            user_panel: null,
                             favourites: group.favourites || "",
-                            profile_pic : null
+                            profile_pic: null
                         });
                     });
 
@@ -69,8 +72,8 @@ const getUserInteractedUsersAndGroups = (req, res) => {
 
 
 
-const getMessages = (req, res) => {
-    const { sender_id, receiver_id,user_type ="user", skip = 0, limit = 100 } = req.query;
+const getMessagesOld = (req, res) => {
+    const { sender_id, receiver_id, user_type = "user", skip = 0, limit = 100 } = req.query;
 
     if (!sender_id || !receiver_id) {
         return res.status(400).json({ status: false, message: "sender_id and receiver_id are required" });
@@ -92,9 +95,59 @@ const getMessages = (req, res) => {
     );
 };
 
+const getMessages = (req, res) => {
+    const { sender_id, receiver_id, user_type = "user", skip = 0, limit = 100,created_at = null } = req.query;
+
+    if (!sender_id || !receiver_id) {
+        return res.status(400).json({ status: false, message: "sender_id and receiver_id are required" });
+    }
+
+    chatModel.getMessagesBetweenUsers(
+        sender_id,
+        receiver_id,
+        user_type,
+        parseInt(skip),
+        parseInt(limit),
+        created_at,
+        (err, messages) => {
+            if (err) {
+                return res.status(500).json({ status: false, message: "Error fetching messages", error: err });
+            }
+
+            // Get unread message IDs for the user
+            chatModel.getUnreadMessages(sender_id, receiver_id, user_type, (err2, unreadRows) => {
+                if (err2) {
+                    console.log('Error fetching unread messages:', err2);
+                    return res.json(messages);
+                }
+                console.log('Unread messages:', unreadRows);
+
+
+                const unreadMessageIds = unreadRows.map(r => r.id);
+                if (unreadMessageIds.length === 0) return res.json(messages);
+
+                // Mark unread messages as read
+                chatModel.markMessagesAsRead(sender_id, unreadMessageIds, (err3) => {
+                    if (!err3) {
+                        const io = getIO();
+                        io.emit('read_message', {
+                            user_id: sender_id,
+                            message_ids: unreadMessageIds,
+                            receiver_id,
+                            user_type,
+                        });
+                    }
+                    return res.json(messages);
+                });
+            });
+
+        }
+    );
+};
+
 
 const sendMessage = (req, res) => {
-    const { sender_id, receiver_id, message, sender_name,user_type = "user", isReply, replyMsgId } = req.body;
+    const { sender_id, receiver_id, message, sender_name, user_type = "user", isReply, replyMsgId } = req.body;
 
     if (!sender_id || !receiver_id || !message?.trim()) {
         return res.status(400).json({ status: false, message: "sender_id, receiver_id, and message are required" });
@@ -113,6 +166,7 @@ const sendMessage = (req, res) => {
                 id: result.insertId,
                 msg_id: replyMsgId,
                 reply_message: message,
+                user_type,
                 sender_id,
                 reply_user_name: sender_name,
                 reply_at: new Date().toISOString(),
@@ -133,6 +187,7 @@ const sendMessage = (req, res) => {
                 id: result.insertId,
                 sender_id,
                 receiver_id,
+                user_type,
                 message,
                 sender_name,
                 created_at: new Date().toISOString(),
@@ -146,35 +201,67 @@ const sendMessage = (req, res) => {
     }
 };
 
+const readPersonsByMessageId = (req, res) => {
+  const messageId = req.params.message_id; // Extract message_id from URL params
 
+  if (!messageId) {
+    return res.status(400).json({ status: false, message: 'message_id is required' });
+  }
+
+  // Get the user_ids from tbl_message_reads where message_id matches the provided message_id
+  chatModel.getReadUsersByMessageId(messageId, (err, users) => {
+    if (err) {
+      console.log('Error fetching users who have read the message:', err);
+      return res.status(500).json({ status: false, message: 'Error fetching read users', error: err });
+    }
+
+    if (users.length === 0) {
+      return res.json({ status: true, message: 'No users have read this message', data: [] });
+    }
+
+    const userIds = users.map(user => user.user_id);
+    chatModel.getUsersDetailsByIds(userIds, (err2, userDetails) => {
+      if (err2) {
+        console.log('Error fetching user details:', err2);
+        return res.status(500).json({ status: false, message: 'Error fetching user details', error: err2 });
+      }
+
+      res.json({
+        status: true,
+        message: 'Users fetched successfully',
+        data: userDetails, // Return the user details
+      });
+    });
+  });
+};
 
 const markFavourite = async (req, res) => {
     try {
-      const { id, user_id, type } = req.body;
-  
-      if (!id || !user_id || !type) {
-        return res.status(400).json({ message: "Missing required fields" });
-      }
-  
-      const updatedFavourites = await chatModel.markFavourite({ id, user_id, type });
-  
-      // Emit to the user who marked the favourite
-      const io = getIO();
-      io.emit("favouriteUpdated", {
-        id,
-        type,
-        user_id,
-        favourites: updatedFavourites,
-      });
-  
-      res.status(200).json({
-        message: "Favourite updated",
-        favourites: updatedFavourites,
-      });
-    } catch (err) {
-      console.error("Error updating favourite:", err);
-      res.status(500).json({ message: "Server error" });
-    }
-  };
+        const { id, user_id, type } = req.body;
 
-module.exports = { getUserInteractedUsersAndGroups,getMessages ,sendMessage, markFavourite};
+        if (!id || !user_id || !type) {
+            return res.status(400).json({ message: "Missing required fields" });
+        }
+
+        const updatedFavourites = await chatModel.markFavourite({ id, user_id, type });
+
+        // Emit to the user who marked the favourite
+        const io = getIO();
+        io.emit("favouriteUpdated", {
+            id,
+            type,
+            user_id,
+            favourites: updatedFavourites,
+        });
+
+        res.status(200).json({
+            message: "Favourite updated",
+            favourites: updatedFavourites,
+        });
+    } catch (err) {
+        console.error("Error updating favourite:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+module.exports = { getUserInteractedUsersAndGroups, getMessages, sendMessage, markFavourite, readPersonsByMessageId };

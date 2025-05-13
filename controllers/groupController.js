@@ -88,6 +88,7 @@ const addMembers = (req, res) => {
                 id: msgResult.insertId,
                 sender_id: user_id,
                 receiver_id: group_id,
+                user_type : "group",
                 message,
                 sender_name: user_name ?? "Admin",
                 created_at: new Date().toISOString(),

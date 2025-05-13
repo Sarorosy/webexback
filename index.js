@@ -6,7 +6,7 @@ const socket = require("./socket");
 const mysql = require("mysql2");
 const cors = require("cors");
 const admin = require("./firebaseAdmin");
-
+const { markMessagesAsRead } = require('./models/chatModel');
 
 const userRoutes = require("./routes/userRoutes");
 const taskRoutes = require("./routes/tasksRoutes");
@@ -47,6 +47,7 @@ const db = mysql.createPool({
     user: 'rapidcol_webex',
     password: 'e5_^ki&qOlC3',
     database: 'rapidcol_webex',
+    timezone: 'Asia/Kolkata',
 });
 
 // Helper to get a connection and execute a query
@@ -72,7 +73,27 @@ io.on("connection", (socket) => {
         io.emit("typing", { from, to }); // Basic: sends to all users
     });
 
+    socket.on('read_message_socket', (data) => {
+    const { user_id, message_ids, receiver_id, user_type = 'user' } = data;
 
+    if (!user_id || !Array.isArray(message_ids) || message_ids.length === 0) {
+      console.log("Invalid read_message_socket payload", data);
+      return;
+    }
+
+    markMessagesAsRead(user_id, message_ids, (err) => {
+      if (err) {
+        console.log("Error marking messages as read via socket:", err);
+        return;
+      }
+      io.emit('read_message', {
+        user_id,
+        message_ids,
+        receiver_id,
+        user_type,
+      });
+    });
+  });
 
     // Handle incoming messages
     socket.on("send_message", (data) => {

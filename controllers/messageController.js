@@ -28,6 +28,28 @@ const pinUnpinMessage = async (req, res) => {
   }
 };
 
+const findMessages = async (req, res) => {
+  const { query, logged_in_userid, find_in_userid } = req.body;
+
+  if (!query || !logged_in_userid || !find_in_userid) {
+    return res.status(400).json({ message: "Query, logged_in_userid, and find_in_userid are required" });
+  }
+
+  try {
+    const messages = await messageModel.findMessages(logged_in_userid, find_in_userid, query);
+
+    if (messages.length > 0) {
+      return res.status(200).json({ messages });
+    } else {
+      return res.status(200).json({ messages: [] });
+    }
+  } catch (err) {
+    console.error("Error fetching messages:", err);
+    res.status(500).json({ message: "Server error", error: err });
+  }
+};
+
 module.exports = {
-  pinUnpinMessage
+  pinUnpinMessage,
+  findMessages
 };

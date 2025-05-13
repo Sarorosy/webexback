@@ -5,6 +5,7 @@ var connection = mysql.createPool({
     user: 'rapidcol_webex',
     password: 'e5_^ki&qOlC3',
     database: 'rapidcol_webex',
+    timezone: 'Asia/Kolkata',
 });
 
 // Helper to get a connection and execute a query

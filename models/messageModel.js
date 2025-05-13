@@ -30,6 +30,48 @@ const togglePin = (user_id, message_id) => {
   });
 };
 
+const findMessages = (logged_in_userid, find_in_userid, query) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        m.id,
+        m.sender_id,
+        m.receiver_id,
+        m.group_id,
+        u.name AS sender_name,
+        u.profile_pic,
+        m.message,
+        m.created_at
+      FROM tbl_messages m
+      JOIN tbl_users u ON m.sender_id = u.id
+      WHERE 
+        (
+          (m.sender_id = ? AND m.receiver_id = ?) 
+          OR 
+          (m.receiver_id = ? AND m.sender_id = ?)
+        )
+        AND m.is_history != 1
+        AND m.message LIKE CONCAT('%', ?, '%')
+      ORDER BY m.created_at DESC
+    `;
+    
+    db.query(sql, [
+      logged_in_userid,
+      find_in_userid,
+      logged_in_userid,
+      find_in_userid,
+      query
+    ], (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows);
+    });
+  });
+};
+
+
+
+
 module.exports = {
-  togglePin
+  togglePin,
+  findMessages
 };
