@@ -23,6 +23,11 @@ const getGroupById = (id, callback) => {
     });
 };
 
+const updateGroup = (id, name, member_limit, callback) => {
+    const query = "UPDATE tbl_groups SET name = ?, member_limit = ? WHERE id = ?";
+    db.query(query, [name, member_limit, id], callback);
+};
+
 
 const getAllGroups = (callback) => {
     const query = `
@@ -113,15 +118,27 @@ const addMultipleMembers = (group_id, memberIds, callback) => {
     db.query(query, [values], callback);
 };
 
+const deleteGroup = (group_id, callback) => {
+    const query1 = "DELETE FROM tbl_group_members WHERE group_id = ?";
+    const query2 = "DELETE FROM tbl_groups WHERE id = ?";
+
+    // First delete members, then the group
+    db.query(query1, [group_id], (err) => {
+        if (err) return callback(err);
+        db.query(query2, [group_id], callback);
+    });
+};
 
 
 module.exports = {
     createGroup,
     getGroupById,
+    updateGroup,
     getAllGroups,
     addMember,
     addMembersToGroup,
     addMultipleMembers,
     getGroupMembers,
     removeMember,
+    deleteGroup
 };

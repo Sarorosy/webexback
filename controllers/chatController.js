@@ -147,7 +147,7 @@ const getMessages = (req, res) => {
 
 
 const sendMessage = (req, res) => {
-    const { sender_id, receiver_id, message, sender_name, user_type = "user", isReply, replyMsgId } = req.body;
+    const { sender_id, receiver_id, message, sender_name,profile_pic, user_type = "user", isReply, replyMsgId } = req.body;
 
     if (!sender_id || !receiver_id || !message?.trim()) {
         return res.status(400).json({ status: false, message: "sender_id, receiver_id, and message are required" });
@@ -169,6 +169,7 @@ const sendMessage = (req, res) => {
                 user_type,
                 sender_id,
                 reply_user_name: sender_name,
+                profile_pic,
                 reply_at: new Date().toISOString(),
             };
 
@@ -190,6 +191,7 @@ const sendMessage = (req, res) => {
                 user_type,
                 message,
                 sender_name,
+                profile_pic,
                 created_at: new Date().toISOString(),
                 is_edited: 0,
             };

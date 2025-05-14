@@ -74,6 +74,7 @@ const getMessagesBetweenUsers = (senderId, receiverId, userType, skip, limit, cr
     SELECT 
       m.*, 
       u.name AS sender_name,
+      u.profile_pic,
       r.id AS reply_id,
       r.msg_id AS reply_msg_id,
       r.reply_message,

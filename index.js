@@ -6,7 +6,10 @@ const socket = require("./socket");
 const mysql = require("mysql2");
 const cors = require("cors");
 const admin = require("./firebaseAdmin");
+const moment = require("moment");
 const { markMessagesAsRead } = require('./models/chatModel');
+
+const reminderController = require("./controllers/reminderController");
 
 const userRoutes = require("./routes/userRoutes");
 const taskRoutes = require("./routes/tasksRoutes");
@@ -16,6 +19,10 @@ const milestoneRoutes = require("./routes/milestoneRoutes");
 const groupRoutes = require("./routes/groupRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const userlimitRoutes = require("./routes/userlimitRoutes");
+const grouplimitRoutes = require("./routes/grouplimitRoutes");
+const reminderRoutes = require('./routes/reminderRoutes');
+
 // Initialize Express app and server
 const app = express();
 app.use(bodyParser.json());
@@ -37,6 +44,9 @@ app.use("/api/milestones", milestoneRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/userlimit", userlimitRoutes);
+app.use("/api/grouplimit", grouplimitRoutes);
+app.use('/api/reminders', reminderRoutes);
 
 app.use("/uploads/taskuploads", express.static("uploads/taskuploads"));
 app.use("/uploads/commentuploads", express.static("uploads/commetuploads"));
@@ -74,26 +84,57 @@ io.on("connection", (socket) => {
     });
 
     socket.on('read_message_socket', (data) => {
-    const { user_id, message_ids, receiver_id, user_type = 'user' } = data;
+        const { user_id, message_ids, receiver_id, user_type = 'user' } = data;
 
-    if (!user_id || !Array.isArray(message_ids) || message_ids.length === 0) {
-      console.log("Invalid read_message_socket payload", data);
-      return;
-    }
+        if (!user_id || !Array.isArray(message_ids) || message_ids.length === 0) {
+            console.log("Invalid read_message_socket payload", data);
+            return;
+        }
 
-    markMessagesAsRead(user_id, message_ids, (err) => {
-      if (err) {
-        console.log("Error marking messages as read via socket:", err);
-        return;
-      }
-      io.emit('read_message', {
-        user_id,
-        message_ids,
-        receiver_id,
-        user_type,
-      });
+        markMessagesAsRead(user_id, message_ids, (err) => {
+            if (err) {
+                console.log("Error marking messages as read via socket:", err);
+                return;
+            }
+            io.emit('read_message', {
+                user_id,
+                message_ids,
+                receiver_id,
+                user_type,
+            });
+        });
     });
-  });
+
+    socket.on("edit_message", (data) => {
+        const { msgId, message, userId } = data;
+
+        // Update message in the database and set is_edited to 1
+        const query = "UPDATE tbl_messages SET message = ?, is_edited = 1 WHERE id = ?";
+        db.query(query, [message, msgId], (err, results) => {
+            if (err) {
+                console.error("Failed to update message:", err);
+                return;
+            }
+
+            // After successful update, broadcast the 'message_edited' event
+            io.emit("message_edited", { msgId, message, userId });
+            console.log("Message updated and broadcasted:", { msgId, message });
+        });
+    });
+
+    socket.on("delete_message", (msgId) => {
+        const query = "UPDATE tbl_messages SET is_deleted = 1 WHERE id = ?";
+        db.query(query, [msgId], (err, results) => {
+            if (err) {
+                console.error("Error deleting message:", err);
+                return;
+            }
+
+            // Emit the message_delete event to all connected clients
+            io.emit("message_delete", msgId);
+            console.log(`Message with ID ${msgId} deleted`);
+        });
+    });
 
     // Handle incoming messages
     socket.on("send_message", (data) => {
@@ -534,6 +575,12 @@ app.delete('/api/users/:id', (req, res) => {
         res.status(200).send('User deleted successfully');
     });
 });
+
+setInterval(() => {
+  const currentTime = moment().format("YYYY-MM-DD HH:mm");
+  console.log("⏰ Checking reminders for:", currentTime);
+  reminderController.checkReminders(currentTime);
+}, 60000);
 
 // Start Server
 const PORT = process.env.PORT || 3000;
