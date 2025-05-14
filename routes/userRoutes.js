@@ -6,7 +6,7 @@ const {addUser , editUser, deleteUser} = require('../controllers/userController'
 const { getUserById } = require("../controllers/userController");
 const { getUsersForGroup } = require("../controllers/userController");
 const { getUsersExcludingIds } = require("../controllers/userController");
-
+const { changeUserType } = require("../controllers/userController");
 
 const router = express.Router();
 
@@ -21,6 +21,9 @@ router.post("/getusersexcluding", getUsersExcludingIds);
 
 
 router.put("/update", updateUser);
+
+router.put("/changeUserType", changeUserType);
+
 
 router.post("/add", addUser);
 

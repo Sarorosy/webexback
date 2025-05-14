@@ -160,28 +160,42 @@ const insertMessageOld = (sender_id, receiver_id, user_type = "user", message, i
   db.query(query, values, callback);
 };
 
-const insertMessage = (sender_id, receiver_id, user_type = "user", message, is_history = 0, callback) => {
-  const createdAt = getISTTime(); // or new Date().toISOString() if you prefer UTC
+const insertMessage = (
+  sender_id,
+  receiver_id,
+  user_type = "user",
+  message,
+  is_history = 0,
+  is_file = 0,
+  filename = null,
+  callback
+) => {
+  const createdAt = getISTTime();
 
   let query = '';
   let values = [];
 
   if (user_type === 'user') {
     query = `
-      INSERT INTO tbl_messages (sender_id, receiver_id, message, is_history, created_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO tbl_messages (
+        sender_id, receiver_id, message, is_history, created_at, is_file, filename
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
-    values = [sender_id, receiver_id, message, is_history, createdAt];
+    values = [sender_id, receiver_id, message, is_history, createdAt, is_file, filename];
   } else {
     query = `
-      INSERT INTO tbl_messages (sender_id, group_id, message, is_history, created_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO tbl_messages (
+        sender_id, group_id, message, is_history, created_at, is_file, filename
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
-    values = [sender_id, receiver_id, message, is_history, createdAt];
+    values = [sender_id, receiver_id, message, is_history, createdAt, is_file, filename];
   }
 
   db.query(query, values, callback);
 };
+
 
 const insertReplyOld = (msgId, sender_id, replyMessage, callback) => {
   const query = `

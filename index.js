@@ -50,6 +50,7 @@ app.use('/api/reminders', reminderRoutes);
 
 app.use("/uploads/taskuploads", express.static("uploads/taskuploads"));
 app.use("/uploads/commentuploads", express.static("uploads/commetuploads"));
+app.use("/uploads/chatuploads", express.static("uploads/chatuploads"));
 app.use("/uploads/users", express.static("uploads/users"));
 const db = mysql.createPool({
     connectionLimit: 10,

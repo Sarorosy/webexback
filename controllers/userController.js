@@ -127,6 +127,38 @@ const updateUser = (req, res) => {
     });
 };
 
+const changeUserType = (req, res) => {
+  const { user_id, user_type } = req.body;
+
+  if (!user_id || typeof user_type !== "string") {
+    return res.status(400).json({ status: false, message: "Invalid user_id or user_type" });
+  }
+
+  userModel.updateUserType(user_id, user_type, (err, result) => {
+    if (err) {
+      console.error("Error updating user type:", err);
+      return res.status(500).json({ status: false, message: "Database error" });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    userModel.findUserById(user_id, (err, updatedUser) => {
+      if (err || !updatedUser) {
+        return res.status(500).json({ status: false, message: "Error fetching updated user" });
+      }
+
+      const io = getIO();
+      io.emit("user_updated", updatedUser);
+
+      console.log(updatedUser);
+
+      res.json({ status: true, message: "User type updated", updatedUser });
+    });
+  });
+};
+
+
 const addUser = (req, res) => {
     const { name, email, password, user_panel, max_group_count, office_name, city_name } = req.body;
 
@@ -213,4 +245,4 @@ const getUserById = (req, res) => {
 };
 
 
-module.exports = { loginUser , getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser, addUser, editUser, deleteUser,getUserById };
+module.exports = { loginUser , getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser,changeUserType, addUser, editUser, deleteUser,getUserById };

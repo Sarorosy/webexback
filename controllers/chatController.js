@@ -1,4 +1,5 @@
-const chatModel = require('../models/chatModel'); // Assuming chatModel exists for DB queries
+const chatModel = require('../models/chatModel');
+
 const { getIO } = require("../socket");
 // Fetch groups and users interacted with the provided user
 const getUserInteractedUsersAndGroups = (req, res) => {
@@ -147,7 +148,10 @@ const getMessages = (req, res) => {
 
 
 const sendMessage = (req, res) => {
-    const { sender_id, receiver_id, message, sender_name,profile_pic, user_type = "user", isReply, replyMsgId } = req.body;
+    const { sender_id, receiver_id, message, sender_name,profile_pic, user_type = "user", isReply, replyMsgId, is_file = 0 } = req.body;
+
+    const file = req.file;
+    const filename = is_file == 1 && file ? file.filename : null;
 
     if (!sender_id || !receiver_id || !message?.trim()) {
         return res.status(400).json({ status: false, message: "sender_id, receiver_id, and message are required" });
@@ -178,8 +182,9 @@ const sendMessage = (req, res) => {
             return res.status(200).json({ status: true, message: "Reply sent", insertId: result.insertId });
         });
     } else {
+        
         // Insert only into tbl_messages
-        chatModel.insertMessage(sender_id, receiver_id, user_type, message, 0, (err, result) => {
+        chatModel.insertMessage(sender_id, receiver_id, user_type, message, 0,is_file, filename, (err, result) => {
             if (err) {
                 return res.status(500).json({ status: false, message: "Error sending message", error: err });
             }
@@ -190,6 +195,8 @@ const sendMessage = (req, res) => {
                 receiver_id,
                 user_type,
                 message,
+                is_file: Number(is_file),
+                filename,
                 sender_name,
                 profile_pic,
                 created_at: new Date().toISOString(),
