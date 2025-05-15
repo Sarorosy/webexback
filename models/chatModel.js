@@ -111,8 +111,40 @@ const getGroupInteractions = (userId, callback) => {
 };
 
 
-// Get unread message counts for both users and groups
 const getUnreadMessageCounts = (userId, callback) => {
+    const query = `
+        SELECT 
+            CASE 
+                WHEN m.group_id IS NULL THEN IF(m.sender_id = ?, m.receiver_id, m.sender_id)
+                ELSE m.group_id
+            END AS id,
+            CASE 
+                WHEN m.group_id IS NULL THEN 'user'
+                ELSE 'group'
+            END AS type,
+            COUNT(*) AS unread_count,
+            MAX(m.id) AS last_message_id,
+            MAX(JSON_CONTAINS(m.mentioned_users, JSON_ARRAY(?))) AS is_mentioned
+        FROM tbl_messages m
+        LEFT JOIN tbl_message_reads r 
+            ON m.id = r.message_id AND r.user_id = ?
+        LEFT JOIN tbl_group_members gm 
+            ON gm.group_id = m.group_id AND gm.user_id = ?
+        WHERE 
+            (
+                (m.group_id IS NULL AND m.receiver_id = ? AND r.id IS NULL)
+                OR
+                (m.group_id IS NOT NULL AND m.sender_id != ? AND r.id IS NULL AND gm.user_id IS NOT NULL)
+            )
+        GROUP BY id, type;
+    `;
+
+    db.query(query, [userId, userId, userId, userId, userId, userId], callback);
+};
+
+
+// Get unread message counts for both users and groups
+const getUnreadMessageCountsold = (userId, callback) => {
     const query = `
         SELECT 
             m.id AS last_message_id,
@@ -138,8 +170,6 @@ const getUnreadMessageCounts = (userId, callback) => {
     `;
     db.query(query, [userId, userId, userId, userId], callback);
 };
-
-
 const getMessagesBetweenUsers = (senderId, receiverId, userType, skip, limit, createdAt, callback) => {
   let query = `
     SELECT 
@@ -219,6 +249,7 @@ const insertMessage = (
   is_history = 0,
   is_file = 0,
   filename = null,
+  mentioned_users = null,
   callback
 ) => {
   const createdAt = getISTTime();
@@ -229,19 +260,19 @@ const insertMessage = (
   if (user_type === 'user') {
     query = `
       INSERT INTO tbl_messages (
-        sender_id, receiver_id, message, is_history, created_at, is_file, filename
+        sender_id, receiver_id, message, is_history, created_at, is_file, filename, mentioned_users
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    values = [sender_id, receiver_id, message, is_history, createdAt, is_file, filename];
+    values = [sender_id, receiver_id, message, is_history, createdAt, is_file, filename,mentioned_users];
   } else {
     query = `
       INSERT INTO tbl_messages (
-        sender_id, group_id, message, is_history, created_at, is_file, filename
+        sender_id, group_id, message, is_history, created_at, is_file, filename, mentioned_users
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    values = [sender_id, receiver_id, message, is_history, createdAt, is_file, filename];
+    values = [sender_id, receiver_id, message, is_history, createdAt, is_file, filename, mentioned_users];
   }
 
   db.query(query, values, callback);

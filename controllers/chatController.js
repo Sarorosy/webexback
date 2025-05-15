@@ -73,29 +73,23 @@ const getUserInteractedUsersAndGroupsold = (req, res) => {
 const getUserInteractedUsersAndGroups = (req, res) => {
     const userId = req.body.userId;
 
-    // Fetch user-to-user interactions
     chatModel.getUserInteractions(userId, (err, users) => {
         if (err) return res.status(500).json({ status: false, message: "Error fetching user interactions: " + err });
 
-        // Fetch group interactions
         chatModel.getGroupInteractions(userId, (err, groupInteractions) => {
             if (err) return res.status(500).json({ status: false, message: "Error fetching group interactions: " + err });
 
-            // Fetch groups user is part of
             chatModel.getUserGroups(userId, (err, groupMemberships) => {
                 if (err) return res.status(500).json({ status: false, message: "Error fetching group memberships: " + err });
 
                 const groupIds = groupMemberships.map(g => g.group_id);
 
-                // Get unread message counts
                 chatModel.getUnreadMessageCounts(userId, (err, unreadCounts) => {
                     if (err) return res.status(500).json({ status: false, message: "Error fetching unread counts: " + err });
-                    
-                    // Create maps for faster lookups
+
                     const userUnreadMap = new Map();
                     const groupUnreadMap = new Map();
-                    
-                    // Process unread counts into maps
+
                     unreadCounts.forEach(item => {
                         if (item.type === 'user') {
                             userUnreadMap.set(item.id, item);
@@ -103,37 +97,38 @@ const getUserInteractedUsersAndGroups = (req, res) => {
                             groupUnreadMap.set(item.id, item);
                         }
                     });
-                    
-                    // Add read status to users
+
+                    // Add read status, unread count and is_mentioned to users
                     users.forEach(user => {
                         const unreadInfo = userUnreadMap.get(user.id);
-                        user.read_status = unreadInfo ? 1 : 0; // 1 means unread, 0 means read
+                        user.read_status = unreadInfo ? 1 : 0;
+                        user.unread_count = unreadInfo ? unreadInfo.unread_count : 0;
+                        user.is_mentioned = unreadInfo ? Boolean(unreadInfo.is_mentioned) : false;
                         if (unreadInfo) {
                             user.last_message_id = unreadInfo.last_message_id;
                         }
                     });
-                    
-                    // Add read status to group interactions
+
+                    // Add read status, unread count and is_mentioned to groups
                     groupInteractions.forEach(group => {
                         const unreadInfo = groupUnreadMap.get(group.id);
                         group.read_status = unreadInfo ? 1 : 0;
+                        group.unread_count = unreadInfo ? unreadInfo.unread_count : 0;
+                        group.is_mentioned = unreadInfo ? Boolean(unreadInfo.is_mentioned) : false;
                         if (unreadInfo) {
                             group.last_message_id = unreadInfo.last_message_id;
                         }
                     });
 
                     if (groupIds.length === 0) {
-                        // No groups, return just user and groupInteractions
                         const combined = [...users, ...groupInteractions];
                         combined.sort((a, b) => new Date(b.last_interacted_time || 0) - new Date(a.last_interacted_time || 0));
                         return res.json({ status: true, message: "Fetched successfully", data: combined });
                     }
 
-                    // Fetch details for all groups the user is in
                     chatModel.getGroupDetails(groupIds, (err, groupDetails) => {
                         if (err) return res.status(500).json({ status: false, message: "Error fetching group details: " + err });
 
-                        // Merge groupDetails with groupInteractions (use last_interacted_time if available)
                         const groupMap = new Map();
 
                         groupDetails.forEach(group => {
@@ -141,29 +136,33 @@ const getUserInteractedUsersAndGroups = (req, res) => {
                                 id: group.id,
                                 name: group.name,
                                 type: "group",
-                                last_interacted_time: null, // default
+                                last_interacted_time: null,
                                 user_type: null,
                                 email: null,
                                 user_panel: null,
                                 favourites: group.favourites || "",
                                 profile_pic: null,
-                                read_status: 0, // default to read
-                                last_message_id: null
+                                read_status: 0,
+                                unread_count: 0,
+                                last_message_id: null,
+                                is_mentioned: false // default false
                             });
                         });
 
                         groupInteractions.forEach(interaction => {
+                            const existing = groupMap.get(interaction.id) || {};
                             groupMap.set(interaction.id, {
-                                ...groupMap.get(interaction.id),
+                                ...existing,
                                 last_interacted_time: interaction.last_interacted_time,
                                 read_status: interaction.read_status || 0,
-                                last_message_id: interaction.last_message_id || null
+                                unread_count: interaction.unread_count || 0 ,
+                                last_message_id: interaction.last_message_id || null,
+                                is_mentioned: interaction.is_mentioned || false
                             });
                         });
 
                         const mergedGroups = Array.from(groupMap.values());
 
-                        // Final merged list
                         const combined = [...users, ...mergedGroups];
                         combined.sort((a, b) => new Date(b.last_interacted_time || 0) - new Date(a.last_interacted_time || 0));
 
@@ -178,6 +177,7 @@ const getUserInteractedUsersAndGroups = (req, res) => {
         });
     });
 };
+
 
 
 const getMessagesOld = (req, res) => {
@@ -204,7 +204,7 @@ const getMessagesOld = (req, res) => {
 };
 
 const getMessages = (req, res) => {
-    const { sender_id, receiver_id, user_type = "user", skip = 0, limit = 100,created_at = null } = req.query;
+    const { sender_id, receiver_id, user_type = "user", skip = 0, limit = 100, created_at = null } = req.query;
 
     if (!sender_id || !receiver_id) {
         return res.status(400).json({ status: false, message: "sender_id and receiver_id are required" });
@@ -255,13 +255,25 @@ const getMessages = (req, res) => {
 
 
 const sendMessage = (req, res) => {
-    const { sender_id, receiver_id, message, sender_name,profile_pic, user_type = "user", isReply, replyMsgId, is_file = 0 } = req.body;
+    const { sender_id, receiver_id, message, sender_name, profile_pic, user_type = "user", isReply, replyMsgId, is_file = 0, selected_users } = req.body;
 
     const file = req.file;
     const filename = is_file == 1 && file ? file.filename : null;
 
     if (!sender_id || !receiver_id || !message?.trim()) {
         return res.status(400).json({ status: false, message: "sender_id, receiver_id, and message are required" });
+    }
+
+    let mentionedUsers = [];
+    try {
+        const parsed = Array.isArray(selected_users)
+            ? selected_users
+            : JSON.parse(selected_users);
+        if (Array.isArray(parsed)) {
+            mentionedUsers = parsed;
+        }
+    } catch (err) {
+        mentionedUsers = [];
     }
 
     const io = getIO();
@@ -289,9 +301,9 @@ const sendMessage = (req, res) => {
             return res.status(200).json({ status: true, message: "Reply sent", insertId: result.insertId });
         });
     } else {
-        
+
         // Insert only into tbl_messages
-        chatModel.insertMessage(sender_id, receiver_id, user_type, message, 0,is_file, filename, (err, result) => {
+        chatModel.insertMessage(sender_id, receiver_id, user_type, message, 0, is_file, filename, JSON.stringify(mentionedUsers), (err, result) => {
             if (err) {
                 return res.status(500).json({ status: false, message: "Error sending message", error: err });
             }
@@ -308,6 +320,7 @@ const sendMessage = (req, res) => {
                 profile_pic,
                 created_at: new Date().toISOString(),
                 is_edited: 0,
+                mentioned_users: mentionedUsers,
             };
 
             io.emit('new_message', messageData);
@@ -318,37 +331,37 @@ const sendMessage = (req, res) => {
 };
 
 const readPersonsByMessageId = (req, res) => {
-  const messageId = req.params.message_id; // Extract message_id from URL params
+    const messageId = req.params.message_id; // Extract message_id from URL params
 
-  if (!messageId) {
-    return res.status(400).json({ status: false, message: 'message_id is required' });
-  }
-
-  // Get the user_ids from tbl_message_reads where message_id matches the provided message_id
-  chatModel.getReadUsersByMessageId(messageId, (err, users) => {
-    if (err) {
-      console.log('Error fetching users who have read the message:', err);
-      return res.status(500).json({ status: false, message: 'Error fetching read users', error: err });
+    if (!messageId) {
+        return res.status(400).json({ status: false, message: 'message_id is required' });
     }
 
-    if (users.length === 0) {
-      return res.json({ status: true, message: 'No users have read this message', data: [] });
-    }
+    // Get the user_ids from tbl_message_reads where message_id matches the provided message_id
+    chatModel.getReadUsersByMessageId(messageId, (err, users) => {
+        if (err) {
+            console.log('Error fetching users who have read the message:', err);
+            return res.status(500).json({ status: false, message: 'Error fetching read users', error: err });
+        }
 
-    const userIds = users.map(user => user.user_id);
-    chatModel.getUsersDetailsByIds(userIds, (err2, userDetails) => {
-      if (err2) {
-        console.log('Error fetching user details:', err2);
-        return res.status(500).json({ status: false, message: 'Error fetching user details', error: err2 });
-      }
+        if (users.length === 0) {
+            return res.json({ status: true, message: 'No users have read this message', data: [] });
+        }
 
-      res.json({
-        status: true,
-        message: 'Users fetched successfully',
-        data: userDetails, // Return the user details
-      });
+        const userIds = users.map(user => user.user_id);
+        chatModel.getUsersDetailsByIds(userIds, (err2, userDetails) => {
+            if (err2) {
+                console.log('Error fetching user details:', err2);
+                return res.status(500).json({ status: false, message: 'Error fetching user details', error: err2 });
+            }
+
+            res.json({
+                status: true,
+                message: 'Users fetched successfully',
+                data: userDetails, // Return the user details
+            });
+        });
     });
-  });
 };
 
 const markFavourite = async (req, res) => {
