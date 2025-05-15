@@ -2,7 +2,7 @@ const chatModel = require('../models/chatModel');
 
 const { getIO } = require("../socket");
 // Fetch groups and users interacted with the provided user
-const getUserInteractedUsersAndGroups = (req, res) => {
+const getUserInteractedUsersAndGroupsold = (req, res) => {
     const userId = req.body.userId;
 
     // Fetch user-to-user interactions
@@ -70,7 +70,114 @@ const getUserInteractedUsersAndGroups = (req, res) => {
         });
     });
 };
+const getUserInteractedUsersAndGroups = (req, res) => {
+    const userId = req.body.userId;
 
+    // Fetch user-to-user interactions
+    chatModel.getUserInteractions(userId, (err, users) => {
+        if (err) return res.status(500).json({ status: false, message: "Error fetching user interactions: " + err });
+
+        // Fetch group interactions
+        chatModel.getGroupInteractions(userId, (err, groupInteractions) => {
+            if (err) return res.status(500).json({ status: false, message: "Error fetching group interactions: " + err });
+
+            // Fetch groups user is part of
+            chatModel.getUserGroups(userId, (err, groupMemberships) => {
+                if (err) return res.status(500).json({ status: false, message: "Error fetching group memberships: " + err });
+
+                const groupIds = groupMemberships.map(g => g.group_id);
+
+                // Get unread message counts
+                chatModel.getUnreadMessageCounts(userId, (err, unreadCounts) => {
+                    if (err) return res.status(500).json({ status: false, message: "Error fetching unread counts: " + err });
+                    
+                    // Create maps for faster lookups
+                    const userUnreadMap = new Map();
+                    const groupUnreadMap = new Map();
+                    
+                    // Process unread counts into maps
+                    unreadCounts.forEach(item => {
+                        if (item.type === 'user') {
+                            userUnreadMap.set(item.id, item);
+                        } else if (item.type === 'group') {
+                            groupUnreadMap.set(item.id, item);
+                        }
+                    });
+                    
+                    // Add read status to users
+                    users.forEach(user => {
+                        const unreadInfo = userUnreadMap.get(user.id);
+                        user.read_status = unreadInfo ? 1 : 0; // 1 means unread, 0 means read
+                        if (unreadInfo) {
+                            user.last_message_id = unreadInfo.last_message_id;
+                        }
+                    });
+                    
+                    // Add read status to group interactions
+                    groupInteractions.forEach(group => {
+                        const unreadInfo = groupUnreadMap.get(group.id);
+                        group.read_status = unreadInfo ? 1 : 0;
+                        if (unreadInfo) {
+                            group.last_message_id = unreadInfo.last_message_id;
+                        }
+                    });
+
+                    if (groupIds.length === 0) {
+                        // No groups, return just user and groupInteractions
+                        const combined = [...users, ...groupInteractions];
+                        combined.sort((a, b) => new Date(b.last_interacted_time || 0) - new Date(a.last_interacted_time || 0));
+                        return res.json({ status: true, message: "Fetched successfully", data: combined });
+                    }
+
+                    // Fetch details for all groups the user is in
+                    chatModel.getGroupDetails(groupIds, (err, groupDetails) => {
+                        if (err) return res.status(500).json({ status: false, message: "Error fetching group details: " + err });
+
+                        // Merge groupDetails with groupInteractions (use last_interacted_time if available)
+                        const groupMap = new Map();
+
+                        groupDetails.forEach(group => {
+                            groupMap.set(group.id, {
+                                id: group.id,
+                                name: group.name,
+                                type: "group",
+                                last_interacted_time: null, // default
+                                user_type: null,
+                                email: null,
+                                user_panel: null,
+                                favourites: group.favourites || "",
+                                profile_pic: null,
+                                read_status: 0, // default to read
+                                last_message_id: null
+                            });
+                        });
+
+                        groupInteractions.forEach(interaction => {
+                            groupMap.set(interaction.id, {
+                                ...groupMap.get(interaction.id),
+                                last_interacted_time: interaction.last_interacted_time,
+                                read_status: interaction.read_status || 0,
+                                last_message_id: interaction.last_message_id || null
+                            });
+                        });
+
+                        const mergedGroups = Array.from(groupMap.values());
+
+                        // Final merged list
+                        const combined = [...users, ...mergedGroups];
+                        combined.sort((a, b) => new Date(b.last_interacted_time || 0) - new Date(a.last_interacted_time || 0));
+
+                        res.json({
+                            status: true,
+                            message: "Fetched successfully",
+                            data: combined
+                        });
+                    });
+                });
+            });
+        });
+    });
+};
 
 
 const getMessagesOld = (req, res) => {

@@ -26,7 +26,7 @@ const getGroupDetails = (groupIds, callback) => {
 
 
 // Get all direct user interactions (excluding self)
-const getUserInteractions = (userId, callback) => {
+const getUserInteractionsold = (userId, callback) => {
   const query = `
         SELECT 
             IF(m.sender_id = ?, m.receiver_id, m.sender_id) AS id,
@@ -51,7 +51,7 @@ const getUserInteractions = (userId, callback) => {
 
 
 // Get all group interactions by the user
-const getGroupInteractions = (userId, callback) => {
+const getGroupInteractionsold = (userId, callback) => {
   const query = `
         SELECT 
             m.group_id AS id,
@@ -66,6 +66,77 @@ const getGroupInteractions = (userId, callback) => {
         GROUP BY m.group_id;
     `;
   db.query(query, [userId, userId], callback);
+};
+
+const getUserInteractions = (userId, callback) => {
+    const query = `
+        SELECT 
+            IF(m.sender_id = ?, m.receiver_id, m.sender_id) AS id,
+            MAX(u.name) AS name,
+            MAX(u.user_type) AS user_type,
+            MAX(u.email) AS email,
+            MAX(u.user_panel) AS user_panel,
+            MAX(m.created_at) AS last_interacted_time,
+            'user' AS type,
+            MAX(u.favourites) AS favourites,
+            MAX(u.profile_pic) AS profile_pic,
+            MAX(m.id) AS last_message_id
+        FROM tbl_messages m
+        JOIN tbl_users u 
+            ON u.id = IF(m.sender_id = ?, m.receiver_id, m.sender_id)
+        WHERE m.group_id IS NULL
+            AND (m.sender_id = ? OR m.receiver_id = ?)
+            AND IF(m.sender_id = ?, m.receiver_id, m.sender_id) IS NOT NULL
+        GROUP BY id;
+    `;
+    db.query(query, [userId, userId, userId, userId, userId], callback);
+};
+
+// Get all group interactions by the user
+const getGroupInteractions = (userId, callback) => {
+    const query = `
+        SELECT 
+            m.group_id AS id,
+            g.name,
+            MAX(m.created_at) AS last_interacted_time,
+            'group' AS type,
+            MAX(g.favourites) AS favourites,
+            MAX(m.id) AS last_message_id
+        FROM tbl_messages m
+        JOIN tbl_groups g ON g.id = m.group_id
+        WHERE m.group_id IS NOT NULL
+        GROUP BY m.group_id;
+    `;
+    db.query(query, [], callback);
+};
+
+
+// Get unread message counts for both users and groups
+const getUnreadMessageCounts = (userId, callback) => {
+    const query = `
+        SELECT 
+            m.id AS last_message_id,
+            CASE 
+                WHEN m.group_id IS NULL THEN IF(m.sender_id = ?, m.receiver_id, m.sender_id)
+                ELSE m.group_id
+            END AS id,
+            CASE 
+                WHEN m.group_id IS NULL THEN 'user'
+                ELSE 'group'
+            END AS type
+        FROM tbl_messages m
+        LEFT JOIN tbl_message_reads r ON m.id = r.message_id AND r.user_id = ?
+        WHERE 
+            (
+                /* User-to-user messages not sent by this user and not read */
+                (m.group_id IS NULL AND m.receiver_id = ? AND r.id IS NULL)
+                OR
+                /* Group messages not sent by this user and not read */
+                (m.group_id IS NOT NULL AND m.sender_id != ? AND r.id IS NULL)
+            )
+        GROUP BY id, type;
+    `;
+    db.query(query, [userId, userId, userId, userId], callback);
 };
 
 
@@ -139,26 +210,6 @@ const getMessagesBetweenUsers = (senderId, receiverId, userType, skip, limit, cr
 };
 
 
-const insertMessageOld = (sender_id, receiver_id, user_type = "user", message, is_history = 0, callback) => {
-  let query = '';
-  let values = [];
-
-  if (user_type === 'user') {
-    query = `
-            INSERT INTO tbl_messages (sender_id, receiver_id, message, is_history, created_at)
-            VALUES (?, ?, ?, ?, NOW())
-        `;
-    values = [sender_id, receiver_id, message, is_history];
-  } else {
-    query = `
-            INSERT INTO tbl_messages (sender_id, group_id, message, is_history, created_at)
-            VALUES (?, ?, ?, ?, NOW())
-        `;
-    values = [sender_id, receiver_id, message, is_history];
-  }
-
-  db.query(query, values, callback);
-};
 
 const insertMessage = (
   sender_id,
@@ -197,13 +248,6 @@ const insertMessage = (
 };
 
 
-const insertReplyOld = (msgId, sender_id, replyMessage, callback) => {
-  const query = `
-        INSERT INTO tbl_replies (msg_id, sender_id, reply_message, reply_at)
-        VALUES (?, ?, ?, NOW())
-    `;
-  db.query(query, [msgId, sender_id, replyMessage], callback);
-};
 const insertReply = (msgId, sender_id, replyMessage, callback) => {
   const replyAt = getISTTime(); // IST timestamp
 
@@ -311,6 +355,7 @@ module.exports = {
   insertReply,
   markFavourite,
   getReadUsersByMessageId,
-  getUsersDetailsByIds
+  getUsersDetailsByIds,
+  getUnreadMessageCounts
 };
 
