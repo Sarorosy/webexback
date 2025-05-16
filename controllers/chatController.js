@@ -1,4 +1,5 @@
 const chatModel = require('../models/chatModel');
+const sendNotification = require('../sendNotification');
 
 const { getIO } = require("../socket");
 // Fetch groups and users interacted with the provided user
@@ -178,8 +179,6 @@ const getUserInteractedUsersAndGroups = (req, res) => {
     });
 };
 
-
-
 const getMessagesOld = (req, res) => {
     const { sender_id, receiver_id, user_type = "user", skip = 0, limit = 100 } = req.query;
 
@@ -253,7 +252,6 @@ const getMessages = (req, res) => {
     );
 };
 
-
 const sendMessage = (req, res) => {
     const { sender_id, receiver_id, message, sender_name, profile_pic, user_type = "user", isReply, replyMsgId, is_file = 0, selected_users } = req.body;
 
@@ -324,6 +322,15 @@ const sendMessage = (req, res) => {
             };
 
             io.emit('new_message', messageData);
+
+            const userFCMToken = "d41LMwcj_vxredBYMY5AWh:APA91bFEbe2GsgfShVpQJICyn5k81i2BdxpBV6weLFW8V_mH0LohcqjTlec_NxSPgdjhw670Xax5RLixjYC4-aKeNm0VNcxBkAsjJWSX1DlwCwnlQKM6uTM";
+            const title = "Deva sent you a chat";
+            const description = "You have been assigned a new task. Check it now!";
+            const customData = { taskId: "12345", priority: "high" };
+
+            sendNotification(userFCMToken, title, description, customData)
+                .then(response => console.log("Notification Response:", response))
+                .catch(error => console.error("Notification Error:", error));
 
             return res.status(200).json({ status: true, message: "Message sent", insertId: result.insertId });
         });
