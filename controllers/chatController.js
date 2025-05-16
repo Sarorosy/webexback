@@ -156,7 +156,7 @@ const getUserInteractedUsersAndGroups = (req, res) => {
                                 ...existing,
                                 last_interacted_time: interaction.last_interacted_time,
                                 read_status: interaction.read_status || 0,
-                                unread_count: interaction.unread_count || 0 ,
+                                unread_count: interaction.unread_count || 0,
                                 last_message_id: interaction.last_message_id || null,
                                 is_mentioned: interaction.is_mentioned || false
                             });
@@ -323,13 +323,15 @@ const sendMessage = (req, res) => {
 
             io.emit('new_message', messageData);
 
-            const userFCMToken = "d41LMwcj_vxredBYMY5AWh:APA91bFEbe2GsgfShVpQJICyn5k81i2BdxpBV6weLFW8V_mH0LohcqjTlec_NxSPgdjhw670Xax5RLixjYC4-aKeNm0VNcxBkAsjJWSX1DlwCwnlQKM6uTM";
-            const title = "Deva sent you a chat";
-            const description = "You have been assigned a new task. Check it now!";
-            const customData = { taskId: "12345", priority: "high" };
-
-            sendNotification(userFCMToken, title, description, customData)
-                .then(response => console.log("Notification Response:", response))
+            sendNotification({
+                sender_id,
+                sender_name,
+                profile_pic,
+                receiver_id,
+                user_type,
+                message,
+                mentionedUsers
+            }).then(response => console.log("Notification Response:", response))
                 .catch(error => console.error("Notification Error:", error));
 
             return res.status(200).json({ status: true, message: "Message sent", insertId: result.insertId });
