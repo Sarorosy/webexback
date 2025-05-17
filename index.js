@@ -598,7 +598,7 @@ app.post('/api/dummy', (req, res) => {
     const sql = 'INSERT INTO tbl_dummy_data (name, email, phone, address) VALUES (?, ?, ?, ?)';
     db.query(sql, [name, email, phone, address], (err, result) => {
         if (err) {
-            return res.status(500).json({ message: 'Error inserting data' });
+            return res.status(500).json({ message: 'Error inserting data' + err});
         }
         res.status(201).json({ message: 'Dummy data added successfully', id: result.insertId });
     });
