@@ -79,10 +79,47 @@ const findUserById = (id, callback) => {
 
 
 const updateUser = (id, userData, callback) => {
-    const { name, pronouns, bio, profile_pic, user_panel, max_group_count } = userData;
-    const query = "UPDATE tbl_users SET name = ?, pronouns = ?, bio = ?, profile_pic = ?, user_panel = ? , max_group_count = ? WHERE id = ?";
-    db.query(query, [name, pronouns, bio, profile_pic, user_panel, max_group_count, id], callback);
+    const {
+        name,
+        pronouns,
+        bio,
+        password,
+        profile_pic,
+        user_panel,
+        max_group_count,
+        office_name,
+        city_name
+    } = userData;
+
+    const query = `
+        UPDATE tbl_users SET 
+            name = ?, 
+            pronouns = ?, 
+            bio = ?, 
+            password = ?, 
+            profile_pic = ?, 
+            user_panel = ?, 
+            max_group_count = ?, 
+            office_name = ?, 
+            city_name = ?
+        WHERE id = ?`;
+
+    const values = [
+        name,
+        pronouns,
+        bio,
+        password,
+        profile_pic,
+        user_panel,
+        max_group_count,
+        office_name,
+        city_name,
+        id
+    ];
+
+    db.query(query, values, callback);
 };
+
 
 const updateUserType = (id, user_type, callback) => {
   const query = "UPDATE tbl_users SET user_type = ? WHERE id = ?";

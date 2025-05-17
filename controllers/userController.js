@@ -93,21 +93,47 @@ const getUsersExcludingIds = (req, res) => {
 
 const updateUser = (req, res) => {
     upload.single("profile_pic")(req, res, () => {
-        const { id, name, pronouns, bio, email, user_panel, max_group_count } = req.body;
-        
-        // Fetch the existing user to retain the old profile picture if no new file is uploaded
+        const {
+            id,
+            name,
+            pronouns,
+            bio,
+            password,
+            email,
+            user_panel,
+            max_group_count,
+            office_name,
+            city_name
+        } = req.body;
+
         userModel.findUserById(id, (err, existingUser) => {
             if (err || !existingUser) {
                 return res.status(500).json({ status: false, message: "User not found" });
             }
 
-            let profile_pic = req.file ? `/uploads/users/${req.file.filename}` : existingUser.profile_pic; // Retain old pic if no new file
+            const profile_pic = req.file
+                ? `/uploads/users/${req.file.filename}`
+                : existingUser.profile_pic;
 
-            userModel.updateUser(id, { name, pronouns, bio, profile_pic, user_panel, max_group_count }, (err, result) => {
+            // Use new values if provided, otherwise fallback to existing values
+            const updatedData = {
+                name: name || existingUser.name,
+                pronouns: pronouns || existingUser.pronouns,
+                bio: bio || existingUser.bio,
+                password: password || existingUser.password,
+                profile_pic,
+                user_panel: user_panel ?? existingUser.user_panel,
+                max_group_count: max_group_count ?? existingUser.max_group_count,
+                office_name: office_name || existingUser.office_name,
+                city_name: city_name || existingUser.city_name
+            };
+
+            userModel.updateUser(id, updatedData, (err, result) => {
                 if (err) {
                     console.error("Update error:", err);
                     return res.status(500).json({ status: false, message: "Database error" });
                 }
+
                 if (result.affectedRows === 0) {
                     return res.status(404).json({ status: false, message: "User not found" });
                 }
@@ -120,12 +146,17 @@ const updateUser = (req, res) => {
                     const io = getIO();
                     io.emit("user_updated", updatedUser);
 
-                    res.json({ status: true, message: "Profile updated successfully", updatedUser });
+                    res.json({
+                        status: true,
+                        message: "Profile updated successfully",
+                        updatedUser
+                    });
                 });
             });
         });
     });
 };
+
 
 const changeUserType = (req, res) => {
   const { user_id, user_type } = req.body;

@@ -540,6 +540,7 @@ app.get('/api/users', (req, res) => {
     });
 });
 
+
 app.post('/api/saveFcmToken', (req, res) => {
     const { user_id, token } = req.body;
 
@@ -575,6 +576,16 @@ app.delete('/api/users/:id', (req, res) => {
             return res.status(500).send('Error deleting user');
         }
         res.status(200).send('User deleted successfully');
+    });
+});
+
+app.get('/api/dummy', (req, res) => {
+    // Fetch users from the database
+    db.query('SELECT * FROM tbl_dummy_data', (err, result) => {
+        if (err) {
+            return res.status(500).send('Error fetching results');
+        }
+        res.json(result);
     });
 });
 

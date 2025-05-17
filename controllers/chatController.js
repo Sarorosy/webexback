@@ -204,7 +204,7 @@ const getMessagesOld = (req, res) => {
 
 const getMessages = (req, res) => {
     const { sender_id, receiver_id, user_type = "user", skip = 0, limit = 100, created_at = null } = req.query;
-
+    console.log(created_at)
     if (!sender_id || !receiver_id) {
         return res.status(400).json({ status: false, message: "sender_id and receiver_id are required" });
     }
@@ -221,17 +221,21 @@ const getMessages = (req, res) => {
                 return res.status(500).json({ status: false, message: "Error fetching messages", error: err });
             }
 
+             const deduplicatedMessages = Array.from(
+                new Map(messages.map(msg => [msg.id, msg])).values()
+            );
+
             // Get unread message IDs for the user
             chatModel.getUnreadMessages(sender_id, receiver_id, user_type, (err2, unreadRows) => {
                 if (err2) {
                     console.log('Error fetching unread messages:', err2);
-                    return res.json(messages);
+                    return res.json(deduplicatedMessages);
                 }
                 console.log('Unread messages:', unreadRows);
 
 
                 const unreadMessageIds = unreadRows.map(r => r.id);
-                if (unreadMessageIds.length === 0) return res.json(messages);
+                if (unreadMessageIds.length === 0) return res.json(deduplicatedMessages);
 
                 // Mark unread messages as read
                 chatModel.markMessagesAsRead(sender_id, unreadMessageIds, (err3) => {
@@ -244,7 +248,7 @@ const getMessages = (req, res) => {
                             user_type,
                         });
                     }
-                    return res.json(messages);
+                    return res.json(deduplicatedMessages);
                 });
             });
 
@@ -295,6 +299,17 @@ const sendMessage = (req, res) => {
             };
 
             io.emit('new_reply', replyData);
+
+            sendNotification({
+                sender_id,
+                sender_name,
+                profile_pic,
+                receiver_id,
+                user_type,
+                message,
+                mentionedUsers
+            }).then(response => console.log("Notification Response:", response))
+                .catch(error => console.error("Notification Error:", error));
 
             return res.status(200).json({ status: true, message: "Reply sent", insertId: result.insertId });
         });
