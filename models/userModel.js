@@ -69,7 +69,7 @@ const getUsersExcludingIds = (excludeIds, callback) => {
 
 
 const findUserById = (id, callback) => {
-    const query = "SELECT id, name, pronouns, password, bio, email, profile_pic, user_panel,user_type, max_group_count, office_name, city_name FROM tbl_users WHERE id = ?";
+    const query = "SELECT id, name, pronouns, password, bio, email, profile_pic, user_panel,user_type, max_group_count, office_name, city_name, view_users, add_users, edit_users, delete_users, access_requests FROM tbl_users WHERE id = ?";
     db.query(query, [id], (err, results) => {
         if (err) return callback(err, null);
         if (results.length === 0) return callback(null, null);
