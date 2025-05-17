@@ -604,8 +604,12 @@ app.post('/api/dummy', (req, res) => {
     });
 });
 
-app.delete('/api/dummy/:id', (req, res) => {
-    const { id } = req.params;
+app.post('/api/dummy/delete', (req, res) => {
+    const { id } = req.body;
+
+    if (!id) {
+        return res.status(400).json({ message: 'ID is required' });
+    }
 
     const sql = 'DELETE FROM tbl_dummy_data WHERE id = ?';
     db.query(sql, [id], (err, result) => {
