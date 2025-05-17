@@ -159,15 +159,24 @@ const updateUser = (req, res) => {
 
 
 const changeUserType = (req, res) => {
-  const { user_id, user_type } = req.body;
+  const { user_id, user_type, permissions } = req.body;
 
-  if (!user_id || typeof user_type !== "string") {
-    return res.status(400).json({ status: false, message: "Invalid user_id or user_type" });
+  if (!user_id || typeof user_type !== "string" || typeof permissions !== "object") {
+    return res.status(400).json({ status: false, message: "Invalid input" });
   }
 
-  userModel.updateUserType(user_id, user_type, (err, result) => {
+  // Convert boolean permissions to 0 or 1
+  const permissionFields = {
+    view_users: permissions.view_users ? 1 : 0,
+    add_users: permissions.add_users ? 1 : 0,
+    edit_users: permissions.edit_users ? 1 : 0,
+    delete_users: permissions.delete_users ? 1 : 0,
+    access_requests: permissions.access_requests ? 1 : 0,
+  };
+
+  userModel.updateUserTypeAndPermissions(user_id, user_type, permissionFields, (err, result) => {
     if (err) {
-      console.error("Error updating user type:", err);
+      console.error("Error updating user:", err);
       return res.status(500).json({ status: false, message: "Database error" });
     }
     if (result.affectedRows === 0) {
@@ -182,12 +191,11 @@ const changeUserType = (req, res) => {
       const io = getIO();
       io.emit("user_updated", updatedUser);
 
-      console.log(updatedUser);
-
-      res.json({ status: true, message: "User type updated", updatedUser });
+      res.json({ status: true, message: "User type and permissions updated", updatedUser });
     });
   });
 };
+
 
 
 const addUser = (req, res) => {

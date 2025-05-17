@@ -121,10 +121,31 @@ const updateUser = (id, userData, callback) => {
 };
 
 
-const updateUserType = (id, user_type, callback) => {
-  const query = "UPDATE tbl_users SET user_type = ? WHERE id = ?";
-  db.query(query, [user_type, id], callback);
+const updateUserTypeAndPermissions = (id, user_type, permissions, callback) => {
+  const query = `
+    UPDATE tbl_users 
+    SET user_type = ?, 
+        view_users = ?, 
+        add_users = ?, 
+        edit_users = ?, 
+        delete_users = ?, 
+        access_requests = ?
+    WHERE id = ?
+  `;
+
+  const values = [
+    user_type,
+    permissions.view_users,
+    permissions.add_users,
+    permissions.edit_users,
+    permissions.delete_users,
+    permissions.access_requests,
+    id,
+  ];
+
+  db.query(query, values, callback);
 };
+
 
 
 const addUser = (userData, callback) => {
@@ -140,4 +161,4 @@ const softDeleteUser = (id, callback) => {
     db.query(query, [id], callback);
 };
 
-module.exports = { findUserByEmail, updateUserToken, getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser,updateUserType, findUserById, addUser, softDeleteUser };
+module.exports = { findUserByEmail, updateUserToken, getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser,updateUserTypeAndPermissions, findUserById, addUser, softDeleteUser };

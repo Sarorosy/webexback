@@ -588,6 +588,38 @@ app.get('/api/dummy', (req, res) => {
         res.json(result);
     });
 });
+app.post('/api/dummy', (req, res) => {
+    const { name, email, phone, address } = req.body;
+
+    if (!name || !email || !phone || !address) {
+        return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const sql = 'INSERT INTO tbl_dummy_data (name, email, phone, address) VALUES (?, ?, ?, ?)';
+    db.query(sql, [name, email, phone, address], (err, result) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error inserting data' });
+        }
+        res.status(201).json({ message: 'Dummy data added successfully', id: result.insertId });
+    });
+});
+
+app.delete('/api/dummy/:id', (req, res) => {
+    const { id } = req.params;
+
+    const sql = 'DELETE FROM tbl_dummy_data WHERE id = ?';
+    db.query(sql, [id], (err, result) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error deleting data' });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'No record found with that ID' });
+        }
+
+        res.json({ message: 'Dummy data deleted successfully' });
+    });
+});
 
 setInterval(() => {
   const currentTime = moment().format("YYYY-MM-DD HH:mm");
