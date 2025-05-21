@@ -52,12 +52,20 @@ app.use("/uploads/taskuploads", express.static("uploads/taskuploads"));
 app.use("/uploads/commentuploads", express.static("uploads/commetuploads"));
 app.use("/uploads/chatuploads", express.static("uploads/chatuploads"));
 app.use("/uploads/users", express.static("uploads/users"));
+// const db = mysql.createPool({
+//     connectionLimit: 10,
+//     host: '50.87.148.156',
+//     user: 'rapidcol_webex',
+//     password: 'e5_^ki&qOlC3',
+//     database: 'rapidcol_webex',
+//     timezone: 'Asia/Kolkata',
+// });
 const db = mysql.createPool({
     connectionLimit: 10,
-    host: '50.87.148.156',
-    user: 'rapidcol_webex',
-    password: 'e5_^ki&qOlC3',
-    database: 'rapidcol_webex',
+    host: '43.225.52.125',
+    user: 'rapidcollaborate_webex',
+    password: '9p}^?XE4Q3qj',
+    database: 'rapidcollaborate_webex',
     timezone: 'Asia/Kolkata',
 });
 

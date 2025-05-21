@@ -1,10 +1,18 @@
 var mysql = require('mysql');
+// var connection = mysql.createPool({
+//     connectionLimit: 10,
+//     host: '50.87.148.156',
+//     user: 'rapidcol_webex',
+//     password: 'e5_^ki&qOlC3',
+//     database: 'rapidcol_webex',
+//     timezone: 'Asia/Kolkata',
+// });
 var connection = mysql.createPool({
     connectionLimit: 10,
-    host: '50.87.148.156',
-    user: 'rapidcol_webex',
-    password: 'e5_^ki&qOlC3',
-    database: 'rapidcol_webex',
+    host: '43.225.52.125',
+    user: 'rapidcollaborate_webex',
+    password: '9p}^?XE4Q3qj',
+    database: 'rapidcollaborate_webex',
     timezone: 'Asia/Kolkata',
 });
 
