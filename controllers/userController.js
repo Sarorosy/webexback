@@ -225,7 +225,7 @@ const addUser = (req, res) => {
         };
 
         userModel.addUser(newUser, (err, result) => {
-            if (err) return res.status(500).json({ status: false, message: "Failed to add user" });
+            if (err) return res.status(500).json({ status: false, message: "Failed to add user" + err });
 
             res.json({ status: true, message: "User added successfully" });
         });
