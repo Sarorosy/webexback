@@ -61,13 +61,17 @@ const totalFindMessages = async (req, res) => {
         id: user.id,
         name: user.name,
         profile_pic: user.profile_pic || null,
-        type: "user"
+        type: "user",
+        office_name: user.office_name,
+        city_name: user.city_name,
       })),
       ...result.groups.map(group => ({
         id: group.id,
         name: group.name,
         profile_pic: group.group_pic || null,
-        type: "group"
+        type: "group",
+        office_name: null,
+        city_name: null,
       }))
     ];
 

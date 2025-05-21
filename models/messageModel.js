@@ -158,7 +158,7 @@ const totalFindMessages = (sender_id, query) => {
   return new Promise((resolve, reject) => {
     // 1. Find matching users
     const userSql = `
-      SELECT id, name, profile_pic FROM tbl_users 
+      SELECT id, name, profile_pic, office_name, city_name FROM tbl_users 
       WHERE id != ? AND name LIKE CONCAT('%', ?, '%')
     `;
 
