@@ -6,12 +6,17 @@ const {addUser , editUser, deleteUser} = require('../controllers/userController'
 const { getUserById } = require("../controllers/userController");
 const { getUsersForGroup } = require("../controllers/userController");
 const { getUsersExcludingIds } = require("../controllers/userController");
-const { changeUserType } = require("../controllers/userController");
+const { changeUserType, checkUserType, updatePassword } = require("../controllers/userController");
 
 const router = express.Router();
 
 // Login route
 router.post("/login", loginUser);
+
+router.post('/check-user-type', checkUserType);
+
+router.post('/update-password', updatePassword);
+
 
 router.get("/fetchallusers", getAllUsers);
 

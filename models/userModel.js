@@ -14,6 +14,12 @@ const updateUserToken = (userId, token, callback) => {
     db.query(query, [token, userId], callback);
 };
 
+const updateUserPassword = (userId, password, callback) => {
+  const query = "UPDATE tbl_users SET password = ? WHERE id = ?";
+  db.query(query, [password, userId], callback);
+};
+
+
 const getAllUsers = (callback) => {
     const query = "SELECT * FROM tbl_users WHERE trashed != 1";
     db.query(query, (err, results) => {
@@ -161,4 +167,4 @@ const softDeleteUser = (id, callback) => {
     db.query(query, [id], callback);
 };
 
-module.exports = { findUserByEmail, updateUserToken, getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser,updateUserTypeAndPermissions, findUserById, addUser, softDeleteUser };
+module.exports = { findUserByEmail, updateUserToken,updateUserPassword, getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser,updateUserTypeAndPermissions, findUserById, addUser, softDeleteUser };

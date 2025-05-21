@@ -51,6 +51,39 @@ const loginUser = (req, res) => {
     });
 };
 
+const checkUserType = (req, res) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return res.status(400).json({ status: false, message: "Email is required" });
+    }
+
+    userModel.findUserByEmail(email, (err, user) => {
+        if (err) return res.status(500).json({ status: false, message: "Database error" });
+        if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+        return res.json({ status: true, user_type: user.user_type , user_panel: user.user_panel });
+    });
+};
+
+const updatePassword = (req, res) => {
+  const { email, newPassword } = req.body;
+
+  if (!email || !newPassword) {
+    return res.status(400).json({ status: false, message: "Email and password are required" });
+  }
+
+  userModel.findUserByEmail(email, (err, user) => {
+    if (err) return res.status(500).json({ status: false, message: "Database error" });
+    if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+    userModel.updateUserPassword(user.id, newPassword, (err, result) => {
+      if (err) return res.status(500).json({ status: false, message: "Failed to update password" });
+      return res.json({ status: true, message: "Password updated successfully" });
+    });
+  });
+};
+
 const getAllUsers = (req, res) => {
     userModel.getAllUsers((err, users) => {
         if (err) return res.status(500).json({ status: false, message: "Database error" });
@@ -103,7 +136,8 @@ const updateUser = (req, res) => {
             user_panel,
             max_group_count,
             office_name,
-            city_name
+            city_name,
+            delete_profile_pic
         } = req.body;
 
         userModel.findUserById(id, (err, existingUser) => {
@@ -111,9 +145,16 @@ const updateUser = (req, res) => {
                 return res.status(500).json({ status: false, message: "User not found" });
             }
 
-            const profile_pic = req.file
+            let profile_pic = existingUser.profile_pic; 
+
+            if(delete_profile_pic && delete_profile_pic == "yes") {
+                profile_pic = null;
+            }else{
+                profile_pic = req.file
                 ? `/uploads/users/${req.file.filename}`
                 : existingUser.profile_pic;
+            }
+            
 
             // Use new values if provided, otherwise fallback to existing values
             const updatedData = {
@@ -284,4 +325,4 @@ const getUserById = (req, res) => {
 };
 
 
-module.exports = { loginUser , getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser,changeUserType, addUser, editUser, deleteUser,getUserById };
+module.exports = { loginUser ,checkUserType, updatePassword, getAllUsers, getUsersForGroup,getUsersExcludingIds, updateUser,changeUserType, addUser, editUser, deleteUser,getUserById };
