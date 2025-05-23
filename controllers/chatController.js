@@ -391,7 +391,7 @@ const sendMessage = (req, res) => {
         formData.append("file", fs.createReadStream(file.path));
         formData.append("type", "chat");
 
-        const response = await axios.post("https://rapidcollaborate.in/webex/upload_file.php", formData, {
+        const response = await axios.post("https://rapidcollaborate.in/ccp/upload_file.php", formData, {
           headers: formData.getHeaders(),
         });
 

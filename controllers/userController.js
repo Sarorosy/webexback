@@ -233,7 +233,7 @@ const updateUser = (req, res) => {
                     formData.append("file", fs.createReadStream(req.file.path));
                     formData.append("type", "user");
 
-                    const response = await axios.post("https://rapidcollaborate.in/webex/upload_file.php", formData, {
+                    const response = await axios.post("https://rapidcollaborate.in/ccp/upload_file.php", formData, {
                         headers: formData.getHeaders()
                     });
 
