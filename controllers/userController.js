@@ -6,6 +6,9 @@ const { getIO } = require("../socket");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const axios = require("axios");
+const FormData = require("form-data");
+
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -124,7 +127,7 @@ const getUsersExcludingIds = (req, res) => {
 
 
 
-const updateUser = (req, res) => {
+const updateUserold = (req, res) => {
     upload.single("profile_pic")(req, res, () => {
         const {
             id,
@@ -198,6 +201,95 @@ const updateUser = (req, res) => {
     });
 };
 
+const updateUser = (req, res) => {
+    upload.single("profile_pic")(req, res, async () => {
+        const {
+            id,
+            name,
+            pronouns,
+            bio,
+            password,
+            email,
+            user_panel,
+            max_group_count,
+            office_name,
+            city_name,
+            delete_profile_pic
+        } = req.body;
+
+        userModel.findUserById(id, async (err, existingUser) => {
+            if (err || !existingUser) {
+                return res.status(500).json({ status: false, message: "User not found" });
+            }
+
+            let profile_pic = existingUser.profile_pic;
+
+            // Upload file externally if file is present and not marked for deletion
+            if (delete_profile_pic && delete_profile_pic === "yes") {
+                profile_pic = null;
+            } else if (req.file) {
+                try {
+                    const formData = new FormData();
+                    formData.append("file", fs.createReadStream(req.file.path));
+                    formData.append("type", "user");
+
+                    const response = await axios.post("https://rapidcollaborate.in/webex/upload_file.php", formData, {
+                        headers: formData.getHeaders()
+                    });
+
+                    if (response.data && response.data.path) {
+                        profile_pic = response.data.path; // Use returned path
+                        fs.unlinkSync(req.file.path); // Remove local file after upload
+                    } else {
+                        console.error("Upload failed:", response.data);
+                        return res.status(500).json({ status: false, message: "File upload failed" });
+                    }
+                } catch (uploadError) {
+                    console.error("Error uploading file:", uploadError);
+                    return res.status(500).json({ status: false, message: "Error uploading file" });
+                }
+            }
+
+            const updatedData = {
+                name: name || existingUser.name,
+                pronouns: pronouns || existingUser.pronouns,
+                bio: bio || existingUser.bio,
+                password: password || existingUser.password,
+                profile_pic,
+                user_panel: user_panel ?? existingUser.user_panel,
+                max_group_count: max_group_count ?? existingUser.max_group_count,
+                office_name: office_name || existingUser.office_name,
+                city_name: city_name || existingUser.city_name
+            };
+
+            userModel.updateUser(id, updatedData, (err, result) => {
+                if (err) {
+                    console.error("Update error:", err);
+                    return res.status(500).json({ status: false, message: "Database error" });
+                }
+
+                if (result.affectedRows === 0) {
+                    return res.status(404).json({ status: false, message: "User not found" });
+                }
+
+                userModel.findUserById(id, (err, updatedUser) => {
+                    if (err || !updatedUser) {
+                        return res.status(500).json({ status: false, message: "Error fetching updated user" });
+                    }
+
+                    const io = getIO();
+                    io.emit("user_updated", updatedUser);
+
+                    res.json({
+                        status: true,
+                        message: "Profile updated successfully",
+                        updatedUser
+                    });
+                });
+            });
+        });
+    });
+};
 
 const changeUserType = (req, res) => {
   const { user_id, user_type, permissions } = req.body;

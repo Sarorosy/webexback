@@ -1,5 +1,11 @@
 const chatModel = require('../models/chatModel');
 const sendNotification = require('../sendNotification');
+const uploadChat = require('../middlewares/uploadMiddleware');
+const axios = require('axios');
+const FormData = require('form-data');
+const fs = require('fs');
+const path = require('path');
+
 
 const { getIO } = require("../socket");
 // Fetch groups and users interacted with the provided user
@@ -221,7 +227,7 @@ const getMessages = (req, res) => {
                 return res.status(500).json({ status: false, message: "Error fetching messages", error: err });
             }
 
-             const deduplicatedMessages = Array.from(
+            const deduplicatedMessages = Array.from(
                 new Map(messages.map(msg => [msg.id, msg])).values()
             );
 
@@ -256,7 +262,7 @@ const getMessages = (req, res) => {
     );
 };
 
-const sendMessage = (req, res) => {
+const sendMessageold = (req, res) => {
     const { sender_id, receiver_id, message, sender_name, profile_pic, user_type = "user", isReply, replyMsgId, is_file = 0, selected_users } = req.body;
 
     const file = req.file;
@@ -353,6 +359,137 @@ const sendMessage = (req, res) => {
         });
     }
 };
+
+const sendMessage = (req, res) => {
+  uploadChat.single("selectedFile")(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ status: false, message: "File upload error", error: err.message });
+    }
+
+    const { sender_id, receiver_id, message, sender_name, profile_pic, user_type = "user", isReply, replyMsgId, is_file = 0, selected_users } = req.body;
+    const file = req.file;
+
+    if (!sender_id || !receiver_id || !(message?.trim() || (is_file == 1 && file))) {
+      return res.status(400).json({ status: false, message: "sender_id, receiver_id and message or file are required" });
+    }
+
+    let mentionedUsers = [];
+    try {
+      const parsed = Array.isArray(selected_users) ? selected_users : JSON.parse(selected_users);
+      if (Array.isArray(parsed)) {
+        mentionedUsers = parsed;
+      }
+    } catch {
+      mentionedUsers = [];
+    }
+
+    let filename = null;
+
+    try {
+      if (is_file == 1 && file) {
+        const formData = new FormData();
+        formData.append("file", fs.createReadStream(file.path));
+        formData.append("type", "chat");
+
+        const response = await axios.post("https://rapidcollaborate.in/webex/upload_file.php", formData, {
+          headers: formData.getHeaders(),
+        });
+
+        if (response.data && response.data.path) {
+          filename = response.data.path;
+          fs.unlinkSync(file.path); // Delete temp file
+        } else {
+          return res.status(500).json({ status: false, message: "File upload failed" });
+        }
+      }
+
+      const io = getIO();
+
+      if (isReply && replyMsgId) {
+        chatModel.insertReply(replyMsgId, sender_id, message, (replyErr, result) => {
+          if (replyErr) {
+            return res.status(500).json({ status: false, message: "Error inserting reply", error: replyErr });
+          }
+
+          const replyData = {
+            id: result.insertId,
+            msg_id: replyMsgId,
+            reply_message: message,
+            user_type,
+            sender_id,
+            reply_user_name: sender_name,
+            profile_pic,
+            reply_at: new Date().toISOString(),
+          };
+
+          io.emit("new_reply", replyData);
+
+          sendNotification({
+            sender_id,
+            sender_name,
+            profile_pic,
+            receiver_id,
+            user_type,
+            message,
+            mentionedUsers,
+          }).catch(console.error);
+
+          return res.status(200).json({ status: true, message: "Reply sent", insertId: result.insertId });
+        });
+      } else {
+        chatModel.insertMessage(
+          sender_id,
+          receiver_id,
+          user_type,
+          message,
+          0,
+          is_file,
+          filename,
+          JSON.stringify(mentionedUsers),
+          (err, result) => {
+            if (err) {
+              return res.status(500).json({ status: false, message: "Error sending message", error: err });
+            }
+
+            const messageData = {
+              id: result.insertId,
+              sender_id,
+              receiver_id,
+              user_type,
+              message,
+              is_file: Number(is_file),
+              filename,
+              sender_name,
+              profile_pic,
+              created_at: new Date().toISOString(),
+              is_edited: 0,
+              mentioned_users: mentionedUsers,
+            };
+
+            io.emit("new_message", messageData);
+
+            sendNotification({
+              sender_id,
+              sender_name,
+              profile_pic,
+              receiver_id,
+              user_type,
+              message,
+              mentionedUsers,
+            }).catch(console.error);
+
+            return res.status(200).json({ status: true, message: "Message sent", insertId: result.insertId });
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Error in sendMessage:", error);
+      return res.status(500).json({ status: false, message: "Internal server error", error: error.message });
+    }
+  });
+};
+
+
 
 const readPersonsByMessageId = (req, res) => {
     const messageId = req.params.message_id; // Extract message_id from URL params

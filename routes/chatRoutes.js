@@ -8,7 +8,9 @@ router.post('/getGroupsAndUsersInteracted', getUserInteractedUsersAndGroups);
 
 router.get('/messages', getMessages);
 
-router.post('/send', uploadChat.single("selectedFile"), sendMessage);
+// router.post('/send', uploadChat.single("selectedFile"), sendMessage);
+router.post('/send', sendMessage);
+
 
 router.post("/favourite", markFavourite);
 
