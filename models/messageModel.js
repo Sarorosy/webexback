@@ -159,7 +159,7 @@ const totalFindMessages = (sender_id, query) => {
     // 1. Find matching users
     const userSql = `
       SELECT id, name, profile_pic, office_name, city_name FROM tbl_users 
-      WHERE id != ? AND name LIKE CONCAT('%', ?, '%')
+      WHERE name LIKE CONCAT('%', ?, '%')
     `;
 
     // 2. Find groups with sender as a member
@@ -200,7 +200,7 @@ const totalFindMessages = (sender_id, query) => {
     // Execute all queries in parallel
     Promise.all([
       new Promise((res, rej) =>
-        db.query(userSql, [sender_id, query], (err, rows) => (err ? rej(err) : res(rows)))
+        db.query(userSql, [ query], (err, rows) => (err ? rej(err) : res(rows)))
       ),
       new Promise((res, rej) =>
         db.query(groupSql, [query, sender_id], (err, rows) => (err ? rej(err) : res(rows)))
