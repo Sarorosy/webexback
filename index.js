@@ -66,6 +66,7 @@ const db = mysql.createPool({
     user: 'rapidcollaborate_webex',
     password: '9p}^?XE4Q3qj',
     database: 'rapidcollaborate_webex',
+    charset: 'utf8mb4',
     timezone: 'Asia/Kolkata',
 });
 
