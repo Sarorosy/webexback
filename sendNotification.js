@@ -26,12 +26,13 @@ const sendNotification = (options) => {
     } = options;
 
     return new Promise((resolve, reject) => {
-        const cleanMessage = striptags(message)
-            .replace(/\s+/g, ' ')
+        const cleanMessage = striptags(String(message || ""))
+            .replace(/\s+/g, " ")
             .trim()
             .split(" ")
             .slice(0, 7)
             .join(" ");
+
 
         let iconUrl = "";
         if (profile_pic) {
@@ -67,72 +68,72 @@ const sendNotification = (options) => {
 
         // 👉 Handle group notification
         else if (user_type === "group") {
-    const group_id = receiver_id;
+            const group_id = receiver_id;
 
-    // Step 0: Get group name from tbl_groups
-    db.query("SELECT name FROM tbl_groups WHERE id = ? LIMIT 1", [group_id], (err, groupResults) => {
-        if (err) return reject({ success: false, error: err.message });
-
-        if (!groupResults.length) return resolve({ success: false, message: "Group not found" });
-
-        const groupName = groupResults[0].name;
-        const senderDisplayName = groupName; // This will be shown as notification title
-
-        // Step 1: Get all members (except sender)
-        db.query("SELECT user_id FROM tbl_group_members WHERE group_id = ? AND user_id != ?", [group_id, sender_id], (err, members) => {
-            if (err) return reject({ success: false, error: err.message });
-
-            if (!members.length) return resolve({ success: false, message: "No group members found" });
-
-            const userIds = members.map(m => m.user_id);
-
-            // Step 2: Get FCM tokens for these users
-            db.query("SELECT user_id, token FROM tbl_fcmtokens WHERE user_id IN (?)", [userIds], (err, tokenResults) => {
+            // Step 0: Get group name from tbl_groups
+            db.query("SELECT name FROM tbl_groups WHERE id = ? LIMIT 1", [group_id], (err, groupResults) => {
                 if (err) return reject({ success: false, error: err.message });
 
-                const promises = [];
+                if (!groupResults.length) return resolve({ success: false, message: "Group not found" });
 
-                for (const row of tokenResults) {
-                    const { user_id, token } = row;
+                const groupName = groupResults[0].name;
+                const senderDisplayName = groupName; // This will be shown as notification title
 
-                    // Check if this user is mentioned
-                    let personalMessage = cleanMessage;
-                    if (Array.isArray(mentionedUsers) && mentionedUsers.includes(user_id)) {
-                        personalMessage = `${sender_name} @mentioned you: ${cleanMessage}`;
-                    } else {
-                        personalMessage = `${sender_name}: ${cleanMessage}`;
-                    }
+                // Step 1: Get all members (except sender)
+                db.query("SELECT user_id FROM tbl_group_members WHERE group_id = ? AND user_id != ?", [group_id, sender_id], (err, members) => {
+                    if (err) return reject({ success: false, error: err.message });
 
-                    const payload = {
-                        token,
-                        data: {
-                            sender_id,
-                            receiver_id,
-                            sender_name: senderDisplayName, // use group name here
-                            profile_pic: iconUrl,
-                            user_type : user_type,
-                            message: personalMessage
+                    if (!members.length) return resolve({ success: false, message: "No group members found" });
+
+                    const userIds = members.map(m => m.user_id);
+
+                    // Step 2: Get FCM tokens for these users
+                    db.query("SELECT user_id, token FROM tbl_fcmtokens WHERE user_id IN (?)", [userIds], (err, tokenResults) => {
+                        if (err) return reject({ success: false, error: err.message });
+
+                        const promises = [];
+
+                        for (const row of tokenResults) {
+                            const { user_id, token } = row;
+
+                            // Check if this user is mentioned
+                            let personalMessage = cleanMessage;
+                            if (Array.isArray(mentionedUsers) && mentionedUsers.includes(user_id)) {
+                                personalMessage = `${sender_name} @mentioned you: ${cleanMessage}`;
+                            } else {
+                                personalMessage = `${sender_name}: ${cleanMessage}`;
+                            }
+
+                            const payload = {
+                                token,
+                                data: {
+                                    sender_id,
+                                    receiver_id,
+                                    sender_name: senderDisplayName, // use group name here
+                                    profile_pic: iconUrl,
+                                    user_type: user_type,
+                                    message: personalMessage
+                                }
+                            };
+
+                            promises.push(
+                                admin.messaging().send(payload)
+                                    .then(res => ({ user_id, success: true, res }))
+                                    .catch(err => ({ user_id, success: false, err: err.message }))
+                            );
                         }
-                    };
 
-                    promises.push(
-                        admin.messaging().send(payload)
-                            .then(res => ({ user_id, success: true, res }))
-                            .catch(err => ({ user_id, success: false, err: err.message }))
-                    );
-                }
-
-                Promise.all(promises)
-                    .then(results => {
-                        const success = results.filter(r => r.success);
-                        const failed = results.filter(r => !r.success);
-                        resolve({ success: true, sent: success.length, failed });
-                    })
-                    .catch(error => reject({ success: false, error }));
+                        Promise.all(promises)
+                            .then(results => {
+                                const success = results.filter(r => r.success);
+                                const failed = results.filter(r => !r.success);
+                                resolve({ success: true, sent: success.length, failed });
+                            })
+                            .catch(error => reject({ success: false, error }));
+                    });
+                });
             });
-        });
-    });
-}
+        }
 
 
         // 👉 Unknown user type
