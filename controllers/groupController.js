@@ -55,8 +55,8 @@ const getGroupById = (req, res) => {
     });
 };
 
-const updateGroup = (req, res) => {
-    const { id, name, member_limit } = req.body;
+const updateGroupold = (req, res) => {
+    const { id,user_id,sender_name, name, member_limit } = req.body;
 
     if (!id || !name || !member_limit) {
         return res.status(400).json({ status: false, message: "Group ID, name, and member_limit are required" });
@@ -71,11 +71,92 @@ const updateGroup = (req, res) => {
                 return res.status(500).json({ status: false, message: "Error retrieving updated group" });
             }
 
+            chatModel.insertMessage(user_id, id, "group", ' updated group info', 1,0,null,null, (msgErr, msgResult) => {
+            if (msgErr) {
+                return res.status(500).json({ status: false, message: "Error inserting group history message" });
+            }
+
+            const io = getIO();
+            const messageData = {
+                id: msgResult.insertId,
+                sender_id: user_id,
+                receiver_id: id,
+                user_type : "group",
+                message : "updated group info",
+                sender_name: sender_name ?? "Admin",
+                created_at: new Date().toISOString(),
+                is_edited: 0,
+                is_history: 1,
+            };
+
+            io.emit('new_message', messageData);
+
+            
+        });
             console.log(updatedGroup)
             const io = getIO();
             io.emit("group_updated", { id, name, type: "group", group: updatedGroup });
 
             res.json({ status: true, message: "Group updated", group: updatedGroup });
+        });
+    });
+};
+
+const updateGroup = (req, res) => {
+    const { id, user_id, sender_name, name, member_limit } = req.body;
+
+    if (!id || !name || !member_limit) {
+        return res.status(400).json({ status: false, message: "Group ID, name, and member_limit are required" });
+    }
+
+    groupModel.updateGroup(id, name, member_limit, (err, result) => {
+        if (err) {
+            return res.status(500).json({ status: false, message: "Database error while updating group" });
+        }
+
+        // Fetch updated group
+        groupModel.getGroupById(id, (err2, updatedGroup) => {
+            if (err2 || !updatedGroup) {
+                return res.status(500).json({ status: false, message: "Error retrieving updated group" });
+            }
+
+            // Insert system message
+            chatModel.insertMessage(user_id, id, "group", "updated group info", 1, 0, null, null, (msgErr, msgResult) => {
+                if (msgErr) {
+                    return res.status(500).json({ status: false, message: "Error inserting group history message" });
+                }
+
+                const io = getIO();
+
+                // Emit system message to group
+                const messageData = {
+                    id: msgResult.insertId,
+                    sender_id: user_id,
+                    receiver_id: id,
+                    user_type: "group",
+                    message: "updated group info",
+                    sender_name: sender_name ?? "Admin",
+                    created_at: new Date().toISOString(),
+                    is_edited: 0,
+                    is_history: 1,
+                };
+                io.emit("new_message", messageData);
+
+                // Emit updated group info
+                io.emit("group_updated", {
+                    id,
+                    name,
+                    type: "group",
+                    group: updatedGroup,
+                });
+
+                // Send response
+                res.json({
+                    status: true,
+                    message: "Group updated successfully",
+                    group: updatedGroup,
+                });
+            });
         });
     });
 };

@@ -93,6 +93,59 @@ io.on("connection", (socket) => {
         io.emit("typing", { from, to }); // Basic: sends to all users
     });
 
+    socket.on("message_react", ({ msgId, emoji, userId }) => {
+        if (!msgId || !emoji || !userId) return;
+
+        // Fetch current reactions
+        const getQuery = "SELECT reactions FROM tbl_messages WHERE id = ?";
+        db.query(getQuery, [msgId], (err, results) => {
+            if (err || results.length === 0) {
+            console.error("Error fetching reactions:", err);
+            return;
+            }
+
+            let reactions = [];
+            const current = results[0].reactions;
+            if (current) {
+            try {
+                reactions = JSON.parse(current);
+            } catch (e) {
+                console.error("Invalid JSON in reactions:", e);
+            }
+            }
+
+            // Check if same user already reacted with same emoji
+            const existingIndex = reactions.findIndex(
+            (r) => r.userId === userId && r.emoji === emoji
+            );
+
+            if (existingIndex !== -1) {
+            // Remove reaction
+            reactions.splice(existingIndex, 1);
+            } else {
+            // Add reaction
+            reactions.push({ userId, emoji });
+            }
+
+            const updatedReactions = JSON.stringify(reactions);
+
+            const updateQuery = "UPDATE tbl_messages SET reactions = ? WHERE id = ?";
+            db.query(updateQuery, [updatedReactions, msgId], (updateErr) => {
+            if (updateErr) {
+                console.error("Failed to update reactions:", updateErr);
+                return;
+            }
+
+            // Emit updated reactions to all clients
+            io.emit("reactions_updated", {
+                msgId,
+                reactions,
+            });
+            });
+        });
+        });
+
+
     socket.on('read_message_socket', (data) => {
         const { user_id, message_ids, receiver_id, user_type = 'user' } = data;
 
