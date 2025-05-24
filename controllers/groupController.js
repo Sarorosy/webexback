@@ -159,13 +159,13 @@ const getGroupMembers = (req, res) => {
 
 // Remove member
 const removeMember = (req, res) => {
-    const { group_id, user_id, user_name, own = false } = req.body;
+    const { group_id,delete_user_name, user_id, user_name, own = false } = req.body;
 
     groupModel.removeMember(group_id, user_id, (err) => {
         if (err) return res.status(500).json({ status: false, message: "Database error" });
 
-        const message = own ? `left this group` : 'removed from this group';
-        chatModel.insertMessage(user_id, group_id, "group", message, 1, (msgErr, msgResult) => {
+        const message = own ? `left this group` : ` removed ${delete_user_name} from this group`;
+        chatModel.insertMessage(user_id, group_id, "group", message, 1, 0,null, null, (msgErr, msgResult) => {
             if (msgErr) {
                 return res.status(500).json({ status: false, message: "Error inserting group history message" });
             }
