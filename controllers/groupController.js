@@ -122,7 +122,7 @@ const addMembers = (req, res) => {
 
         // After adding members, insert history message
         const message = `added ${members.length} people(s) to this group`;
-        chatModel.insertMessage(user_id, group_id, "group", message, 1, (msgErr, msgResult) => {
+        chatModel.insertMessage(user_id, group_id, "group", message, 1,0,null,null, (msgErr, msgResult) => {
             if (msgErr) {
                 return res.status(500).json({ status: false, message: "Error inserting group history message" });
             }
