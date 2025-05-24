@@ -36,7 +36,7 @@ const sendNotification = (options) => {
 
         let iconUrl = "";
         if (profile_pic) {
-            iconUrl = `https://rapidcollaborate.in/webex${profile_pic}`;
+            iconUrl = `https://rapidcollaborate.in/ccp${profile_pic}`;
         } else {
             const firstLetter = sender_name ? sender_name.charAt(0).toUpperCase() : "U";
             iconUrl = `https://ui-avatars.com/api/?name=${firstLetter}&background=random&color=fff&size=128`;
